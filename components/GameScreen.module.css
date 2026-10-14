@@ -1,0 +1,664 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100svh;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #1c302b;
+  color: #f5eed9;
+  --dock: 0px;
+  --edge: 24px;
+  --bottom: calc(var(--dock) + env(safe-area-inset-bottom, 0px));
+}
+.world {
+  position: absolute;
+  inset: 0 0 var(--bottom);
+  overflow: hidden;
+  background: #a5ce7e;
+  touch-action: none;
+}
+.world canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: max(var(--edge), env(safe-area-inset-top))
+    max(var(--edge), env(safe-area-inset-right))
+    max(var(--edge), env(safe-area-inset-bottom))
+    max(var(--edge), env(safe-area-inset-left));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.location,
+.menuButton,
+.lead,
+.keyHints,
+.toast {
+  background: #f9f7e9f2;
+  color: #374c3b;
+  border: 2px solid #596d4b;
+  border-radius: 5px;
+  box-shadow: 0 3px 0 #263b3433;
+  pointer-events: auto;
+}
+.location {
+  padding: 12px 17px;
+  min-width: 180px;
+  max-width: calc(100% - 120px);
+}
+.location > span {
+  font: 700 9px monospace;
+  letter-spacing: 1.4px;
+  color: #829169;
+  display: block;
+  margin-bottom: 5px;
+}
+.location h1 {
+  font-size: 19px;
+  letter-spacing: -0.6px;
+}
+.location small {
+  font-size: 10px;
+  display: block;
+  margin-top: 7px;
+  color: #7c8b70;
+}
+.location small i {
+  margin-right: 5px;
+}
+.menuButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 12px;
+}
+.menuButton kbd {
+  margin-left: 6px;
+}
+.lead {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  padding: 8px 14px 8px 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  min-width: 205px;
+}
+.lead strong {
+  display: block;
+  font-size: 12px;
+}
+.lead small {
+  display: block;
+  font-size: 9px;
+  color: #7d8d6e;
+  margin-top: 4px;
+}
+.lead > div {
+  flex: 1;
+}
+.lead em {
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 400;
+  margin-left: 10px;
+}
+.keyHints {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  padding: 10px 14px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.keyHints > span {
+  margin-right: 9px;
+}
+.keyHints kbd {
+  font-size: 10px;
+}
+.toast {
+  position: absolute;
+  bottom: 90px;
+  left: 24px;
+  max-width: min(450px, calc(100% - 48px));
+  padding: 9px 13px;
+  font-size: 11px;
+  line-height: 1.6;
+  pointer-events: none;
+}
+.controller {
+  display: none;
+}
+.screen :global(.modal-backdrop) {
+  position: absolute;
+  inset: 0 0 var(--bottom);
+  padding: 24px;
+  background: #1a332567;
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+}
+.screen :global(.modal) {
+  max-height: 100%;
+  border: 3px solid #637753;
+  border-radius: 8px;
+  background: #faf8e9;
+  color: #35463b;
+  box-shadow: 0 5px 0 #20372e44;
+}
+.screen :global(.modal h2) {
+  font-size: 22px;
+}
+.screen :global(.modal button:focus-visible),
+.screen :global(.dialogue button:focus-visible) {
+  outline: 3px solid #c48b46;
+  outline-offset: 2px;
+  background-color: #e6ecd4;
+}
+.screen :global(.modal .primary-button:focus-visible) {
+  color: #35463b;
+}
+.screen :global(.dialogue) {
+  position: absolute;
+  bottom: calc(var(--bottom) + 28px);
+  max-width: calc(100% - 48px);
+  border-color: #637753;
+  border-radius: 6px;
+  color: #35463b;
+}
+.menuOptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin: 22px 0;
+}
+.menuOptions button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 17px;
+  text-align: left;
+  border: 1px solid #d6dfc4;
+  border-radius: 5px;
+  background: #eef2df;
+  font-weight: 600;
+  font-size: 13px;
+}
+.menuOptions small {
+  margin-left: auto;
+  font-weight: 400;
+  color: #849474;
+  font-size: 10px;
+}
+.menuOptions button:hover {
+  background: #e2e9cf;
+}
+.menuSummary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #8a957b;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.screen :global(.team-card),
+.screen :global(.trainers-card) {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.screen :global(.team-list) {
+  max-height: none;
+}
+.screen :global(.quest) {
+  margin-top: 20px;
+}
+.screen :global(.section-subtitle) {
+  font-size: 12px;
+}
+.screen :global(.trainer-row small) {
+  font-size: 11px;
+}
+.screen :global(.team-member .monster-title strong) {
+  font-size: 14px;
+}
+.screen :global(.team-member .monster-title > span) {
+  font-size: 11px;
+}
+.screen :global(.team-member small) {
+  font-size: 10px;
+}
+.screen :global(.team-member .type) {
+  font-size: 9px;
+}
+@media (max-width: 600px), (pointer: coarse), (max-height: 450px) {
+  .screen {
+    --dock: 190px;
+    --edge: 12px;
+  }
+  .world {
+    bottom: var(--bottom);
+  }
+  .location {
+    padding: 8px 11px;
+    min-width: 0;
+    max-width: calc(100% - 70px);
+  }
+  .location > span {
+    font-size: 7px;
+    margin-bottom: 4px;
+  }
+  .location h1 {
+    font-size: 15px;
+  }
+  .location small {
+    font-size: 8px;
+    margin-top: 5px;
+  }
+  .menuButton {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+    justify-content: center;
+  }
+  .menuButton > span,
+  .menuButton kbd {
+    display: none;
+  }
+  .lead {
+    right: 12px;
+    bottom: 12px;
+    min-width: 150px;
+    gap: 3px;
+    padding: 5px 9px 5px 4px;
+  }
+  .lead > span {
+    width: 42px !important;
+    height: 42px !important;
+  }
+  .lead strong {
+    font-size: 10px;
+  }
+  .lead em {
+    font-size: 8px;
+    margin-left: 5px;
+  }
+  .lead small {
+    font-size: 8px;
+  }
+  .keyHints {
+    display: none;
+  }
+  .toast {
+    bottom: 78px;
+    left: 12px;
+    font-size: 9px;
+    max-width: calc(100% - 24px);
+    padding: 7px 10px;
+  }
+  .controller {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    position: absolute;
+    inset: auto 0 0;
+    height: var(--bottom);
+    padding: 34px max(26px, env(safe-area-inset-right))
+      calc(14px + env(safe-area-inset-bottom))
+      max(26px, env(safe-area-inset-left));
+    background: #253d35;
+    border-top: 3px solid #40584a;
+    z-index: 25;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+  .controllerBrand {
+    position: absolute;
+    left: 27px;
+    right: 27px;
+    top: 10px;
+    font: 700 12px monospace;
+    letter-spacing: 1.6px;
+    color: #dce5c6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .controllerBrand > span {
+    font-style: italic;
+    font-weight: 400;
+    color: #bdca9d;
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+  .controllerBrand small {
+    margin-left: auto;
+    font-size: 6px;
+    letter-spacing: 1px;
+    color: #99ad8d;
+  }
+  .dpad {
+    display: grid;
+    width: 132px;
+    height: 132px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    filter: drop-shadow(0 4px 0 #152a22);
+    flex-shrink: 0;
+  }
+  .dpad button {
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: #526f53;
+    color: #eaf0cf;
+    border: 1px solid #7d9970;
+    touch-action: none;
+    box-shadow: inset 0 2px #8da77c;
+  }
+  .dpad button[data-direction="up"] {
+    grid-area: 1/2;
+    border-bottom: 0;
+    border-radius: 5px 5px 0 0;
+  }
+  .dpad button[data-direction="left"] {
+    grid-area: 2/1;
+    border-right: 0;
+    border-radius: 5px 0 0 5px;
+  }
+  .dpad button[data-direction="right"] {
+    grid-area: 2/3;
+    border-left: 0;
+    border-radius: 0 5px 5px 0;
+  }
+  .dpad button[data-direction="down"] {
+    grid-area: 3/2;
+    border-top: 0;
+    border-radius: 0 0 5px 5px;
+    box-shadow: none;
+  }
+  .dpad > span {
+    grid-area: 2/2;
+    background: #526f53;
+  }
+  .dpad button[data-pressed="true"] {
+    background: #354e39;
+    box-shadow: inset 0 2px 4px #203328;
+  }
+  .actionKeys {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+  }
+  .actionKeys > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .actionKeys > div:first-child {
+    margin-top: 30px;
+  }
+  .actionKeys > div:last-child {
+    margin-bottom: 25px;
+  }
+  .actionKeys button {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: #e4c38b;
+    color: #344a35;
+    border: 2px solid #efd4a0;
+    box-shadow:
+      0 5px #9a8158,
+      0 7px 0 5px #1b3028;
+    font: 700 23px monospace;
+    touch-action: none;
+  }
+  .actionKeys > div:first-child button {
+    background: #ba765d;
+    color: #fff0d0;
+    border-color: #dba084;
+    box-shadow:
+      0 5px #795343,
+      0 7px 0 5px #1b3028;
+  }
+  .actionKeys button:active {
+    transform: translateY(3px);
+  }
+  .actionKeys span {
+    font: 8px monospace;
+    letter-spacing: 1px;
+    color: #bdcba9;
+  }
+  .screen :global(.modal-backdrop) {
+    padding: 12px;
+  }
+  .screen :global(.modal) {
+    padding: 24px 18px;
+    max-height: 100%;
+    overscroll-behavior: contain;
+    scroll-padding: 20px;
+  }
+  .screen :global(.modal h2) {
+    font-size: 18px;
+    padding-right: 20px;
+  }
+  .screen :global(.dialogue) {
+    bottom: calc(var(--bottom) + 12px);
+    max-width: calc(100% - 24px);
+    padding: 16px;
+    max-height: calc(100dvh - var(--bottom) - 24px);
+    overflow: auto;
+  }
+  .screen :global(.battle-scene) {
+    height: 180px;
+  }
+  .screen :global(.battle-scene .sprite) {
+    width: 110px !important;
+    height: 110px !important;
+  }
+  .screen :global(.battle-info) {
+    margin-top: 15px;
+  }
+  .screen :global(.battle-message) {
+    min-height: 0;
+    font-size: 11px;
+    margin: 8px 0;
+    padding: 10px;
+  }
+  .screen :global(.battle-actions) {
+    gap: 7px;
+    margin-top: 10px;
+  }
+  .screen :global(.battle-actions button) {
+    min-height: 44px;
+    padding: 9px;
+    font-size: 11px;
+  }
+  .menuOptions {
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .menuOptions button {
+    padding: 13px 10px;
+    font-size: 12px;
+    min-height: 48px;
+  }
+  .menuOptions small {
+    font-size: 9px;
+  }
+  .menuSummary {
+    font-size: 10px;
+  }
+}
+@media (max-height: 700px) and (orientation: portrait) and (max-width: 600px) {
+  .screen {
+    --dock: 165px;
+  }
+  .controller {
+    padding-top: 26px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  .dpad {
+    width: 120px;
+    height: 120px;
+  }
+  .controllerBrand {
+    top: 7px;
+  }
+  .screen :global(.battle-scene) {
+    height: 130px;
+  }
+  .screen :global(.battle-scene .sprite) {
+    width: 85px !important;
+    height: 85px !important;
+  }
+}
+@media (orientation: landscape) and (max-height: 600px) and (pointer: coarse),
+  (orientation: landscape) and (max-height: 450px) {
+  .screen {
+    --dock: 0px;
+    --edge: 10px;
+  }
+  .controller {
+    display: flex;
+    inset: auto 0 0;
+    height: 142px;
+    padding: 10px max(18px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(18px, env(safe-area-inset-left));
+    background: none;
+    border: 0;
+    pointer-events: none;
+  }
+  .controllerBrand {
+    display: none;
+  }
+  .controller .dpad,
+  .controller .actionKeys {
+    pointer-events: auto;
+    opacity: 0.9;
+  }
+  .dpad {
+    width: 120px;
+    height: 120px;
+  }
+  .actionKeys button {
+    width: 48px;
+    height: 48px;
+  }
+  .actionKeys {
+    gap: 14px;
+  }
+  .actionKeys span {
+    color: #fdf4da;
+    text-shadow: 0 1px 3px #203328;
+  }
+  .lead {
+    display: none;
+  }
+  .toast {
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    max-width: calc(100% - 340px);
+    font-size: 9px;
+  }
+  .screen :global(.modal-backdrop) {
+    padding: 10px 155px;
+  }
+  .screen :global(.modal) {
+    padding: 20px 16px;
+  }
+  .screen :global(.dialogue) {
+    width: calc(100% - 320px);
+    max-width: 600px;
+    bottom: 15px;
+  }
+  .screen :global(.battle-scene) {
+    height: 100px;
+  }
+  .screen :global(.battle-scene .sprite) {
+    width: 85px !important;
+    height: 85px !important;
+  }
+  .screen :global(.battle-info) {
+    margin-top: 8px;
+  }
+  .screen :global(.battle-info h2) {
+    font-size: 15px;
+  }
+  .screen :global(.modal .eyebrow) {
+    font-size: 8px;
+  }
+  .menuOptions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .menuOptions button {
+    font-size: 11px;
+    padding: 10px;
+  }
+  .menuOptions small {
+    display: none;
+  }
+  .keyHints {
+    display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .controller {
+    padding-left: 18px;
+    padding-right: 18px;
+    gap: 12px;
+  }
+  .dpad {
+    width: 120px;
+    height: 120px;
+  }
+  .actionKeys {
+    gap: 12px;
+  }
+  .actionKeys button {
+    width: 50px;
+    height: 50px;
+  }
+  .controllerBrand {
+    left: 18px;
+    right: 18px;
+  }
+  .controllerBrand small {
+    font-size: 5px;
+  }
+}
+
+@media (max-width: 600px), (pointer: coarse) {
+  .screen:has(input:focus) {
+    --dock: 0px;
+  }
+  .screen:has(input:focus) .controller {
+    display: none;
+  }
+}

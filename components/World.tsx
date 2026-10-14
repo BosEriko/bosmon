@@ -1,10 +1,9 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { regionAt, Save, tileAt, TOWNS } from "@/lib/game";
 import type { Trainer } from "@/lib/firebase";
-const SIZE = 24,
-  COLS = 31,
-  ROWS = 21;
+import { worldViewport } from "@/lib/controls";
+const SIZE = 24;
 export default function World({
   save,
   trainers,
@@ -15,18 +14,38 @@ export default function World({
   onMove: (dx: number, dy: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const [viewport, setViewport] = useState(() => worldViewport(744, 504));
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setViewport(worldViewport(width, height));
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
   useEffect(() => {
     const ctx = ref.current?.getContext("2d");
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
-    const ox = save.x - 15,
-      oy = save.y - 10;
+    const { cols, rows, width, height } = viewport;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.translate(
+      Math.floor((width - cols * SIZE) / 2),
+      Math.floor((height - rows * SIZE) / 2),
+    );
+    const cx = Math.floor(cols / 2),
+      cy = Math.floor(rows / 2);
+    const ox = save.x - cx,
+      oy = save.y - cy;
     const rect = (x: number, y: number, w: number, h: number, c: string) => {
       ctx.fillStyle = c;
       ctx.fillRect(x, y, w, h);
     };
-    for (let row = 0; row < ROWS; row++)
-      for (let col = 0; col < COLS; col++) {
+    for (let row = 0; row < rows; row++)
+      for (let col = 0; col < cols; col++) {
         const wx = ox + col,
           wy = oy + row,
           x = col * SIZE,
@@ -97,7 +116,7 @@ export default function World({
     const person = (wx: number, wy: number, color: string, label?: string) => {
       const x = (wx - ox) * 24,
         y = (wy - oy) * 24;
-      if (x < 0 || y < 0 || x > 744 || y > 504) return;
+      if (x < 0 || y < 0 || x > cols * SIZE || y > rows * SIZE) return;
       rect(x + 5, y + 21, 15, 3, "#789864");
       rect(x + 8, y + 15, 4, 7, "#3d4d51");
       rect(x + 15, y + 15, 4, 7, "#3d4d51");
@@ -123,15 +142,15 @@ export default function World({
     person(save.x, save.y, "#d97b4f");
     ctx.strokeStyle = "#fff1c4";
     ctx.lineWidth = 1;
-    ctx.strokeRect(15 * 24 + 2, 10 * 24 - 2, 21, 29);
-  }, [save, trainers]);
+    ctx.strokeRect(cx * 24 + 2, cy * 24 - 2, 21, 29);
+  }, [save, trainers, viewport]);
   return (
     <canvas
       ref={ref}
-      width={744}
-      height={504}
+      width={viewport.width}
+      height={viewport.height}
       className="world-canvas"
-      aria-label="Explorable world. Move with arrow keys or W A S D. Press E near a guide to talk."
+      aria-label="Explorable world. Move with arrow keys or W A S D. Press J near a guide to talk. Press K for the menu."
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect(),
           dx = (e.clientX - r.left) / r.width - 0.5,

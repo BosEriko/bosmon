@@ -47,3 +47,22 @@ Changed `lib/firebase.ts`, `components/Game.tsx`, `app/globals.css`, and setup d
 - Review fix: keyboard movement and NPC interactions cannot mutate a new local account save while its cloud save is still loading.
 
 Final status: implementation and local checks finished; end-to-end authentication verification remains incomplete pending Firebase configuration. Enable Email/Password and Google providers, configure the four public environment variables, authorize the application domain, then test with real accounts. No Firebase console settings were changed by this update.
+
+# Full-window game and handheld controls update
+
+Replaced the dashboard with a viewport-filling world, compact location/health overlays, and an in-game menu. Preserved companion selection, supplies, field guide, map, research rewards, player list, and account UI inside the menu. The Canvas camera adapts its tile coverage to the available screen dimensions while keeping the player centered.
+
+Reference inspection: read `../arcade.twiswua.com/app/handheld-controls.tsx`, its CSS module, `game-shell.tsx`, `game-shell.module.css`, and related responsive styles. Reused its approach to dynamic viewport height, safe-area insets, pointer-based controls, and short-screen layout adaptations. The public arcade URL was inaccessible through the web tool; source inspection supplied the implementation reference.
+
+Changed files: `components/Game.tsx`, `components/World.tsx`, `app/layout.tsx`, `README.md`; added `components/GameControls.tsx`, `components/GameScreen.module.css`, `lib/controls.ts`, and `tests/controls.test.ts`.
+
+- PASS: 23 automated tests, including WASD/arrow equivalence, J/K mappings, menu wrapping, and camera coverage at desktop/portrait/landscape dimensions.
+- PASS: TypeScript and production build.
+- PASS: whitespace/diff check.
+- PASS in a simulated DOM: movement; J interaction and dialogue continuation; K closing dialogue/opening menus; direction-key selection; J confirmation; typing protection; held touch movement; cancellation and blur stopping movement; touch J/K; battle attack, catch, completion, and K/J fleeing. Tested the actual React components using a temporary jsdom/esbuild harness in `/tmp/bosmon-test`, with Canvas drawing mocked. No runtime dependency was added to the project.
+- Code review fix: stop held directional input when a text field receives focus. Hide the touch controller while a form field is focused to leave more room for account forms.
+- UNVERIFIED visually: desktop rendering, real-device touch, mobile portrait/landscape screenshots, safe-area behavior, and virtual-keyboard layout. The browser inventory was empty, so no rendered-browser checks were possible. Simulated DOM tests do not validate layout.
+
+Controls: WASD/arrows move or select; J interacts/confirms; K opens the menu/goes back. In battles K selects Run away and J confirms, rather than fleeing on an accidental back press. E/Escape remain aliases. On mobile the D-pad supports held movement, and J/K buttons work in world, dialogue, menus, and battles.
+
+Final status: implementation and automated checks finished; full visual/device verification remains incomplete because no browser was connected. The game fills the browser viewport; it does not force the browser into the operating system’s exclusive fullscreen mode.

@@ -1,23 +1,18 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowDown,
-  ArrowLeft,
   ArrowRight,
-  ArrowUp,
   Backpack,
   BookOpen,
   Check,
   ChevronRight,
-  Compass,
+  Menu,
   Crosshair,
   Flag,
   Heart,
   Leaf,
   Map,
-  MessageCircle,
   Settings,
-  Sparkles,
   Swords,
   Users,
   X,
@@ -42,10 +37,22 @@ import {
   watchAccount,
 } from "@/lib/firebase";
 import World from "./World";
+import GameControls from "./GameControls";
+import styles from "./GameScreen.module.css";
+import { nextControlIndex } from "@/lib/controls";
 import AccountPanel from "./AccountPanel";
 import { Account, saveKey, chooseAccountSave } from "@/lib/account";
 import { Battle, BattleAction, resolveBattle } from "@/lib/battle";
-type Panel = "map" | "guide" | "bag" | "settings" | null;
+type Panel =
+  | "menu"
+  | "team"
+  | "quest"
+  | "trainers"
+  | "map"
+  | "guide"
+  | "bag"
+  | "settings"
+  | null;
 
 function Sprite({ species, size = 72 }: { species: number; size?: number }) {
   return (
@@ -124,7 +131,6 @@ function GameSession({ account }: { account: Account | null }) {
     [notice, setNotice] = useState(
       "A new adventure starts with a little curiosity.",
     ),
-    [tab, setTab] = useState("explore"),
     [now, setNow] = useState(0);
   const cloudRef = useRef<Awaited<ReturnType<typeof connectCloud>> | null>(
       null,
@@ -152,7 +158,11 @@ function GameSession({ account }: { account: Account | null }) {
           'button:not(:disabled), input, [tabindex="0"]',
         ) ?? [],
       );
-    controls()[0]?.focus();
+    (
+      dialog?.querySelector<HTMLElement>(
+        "[data-game-choice], .battle-actions button, button:not(.close)",
+      ) ?? controls()[0]
+    )?.focus();
     const trap = (e: KeyboardEvent) => {
       if (e.key !== "Tab") return;
       const items = controls(),
@@ -274,7 +284,7 @@ function GameSession({ account }: { account: Account | null }) {
       nx = (r % 5) * 32 + 19,
       ny = Math.floor(r / 5) * 24 + 12;
     if (Math.abs(s.x - nx) + Math.abs(s.y - ny) > 2) {
-      setNotice("Look for a guide beside the main path, then press E.");
+      setNotice("Look for a guide beside the main path, then press J.");
       return;
     }
     if (TOWNS.has(r)) {
@@ -329,33 +339,69 @@ function GameSession({ account }: { account: Account | null }) {
     },
     [battle, panel, dialogue, setSave, sessionReady],
   );
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      const dirs: Record<string, [number, number]> = {
-        ArrowUp: [0, -1],
-        w: [0, -1],
-        ArrowDown: [0, 1],
-        s: [0, 1],
-        ArrowLeft: [-1, 0],
-        a: [-1, 0],
-        ArrowRight: [1, 0],
-        d: [1, 0],
-      };
-      if (dirs[e.key]) {
-        e.preventDefault();
-        step(...dirs[e.key]);
-      }
-      if (e.key.toLowerCase() === "e") talk();
-      if (e.key === "Escape" && !battle) {
-        setPanel(null);
-        setDialogue(null);
-        setTab("explore");
-      }
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [step, talk, battle]);
+  function direction(dx: number, dy: number) {
+    if (!sessionReady) return;
+    if (!modalOpen) {
+      step(dx, dy);
+      return;
+    }
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    const controls = Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        "button:not(:disabled), input:not(:disabled)",
+      ) ?? [],
+    );
+    const index = nextControlIndex(
+      controls.indexOf(document.activeElement as HTMLElement),
+      controls.length,
+      dx || dy,
+    );
+    controls[index]?.focus();
+    controls[index]?.scrollIntoView({ block: "nearest" });
+  }
+  function confirm() {
+    if (!sessionReady) return;
+    if (dialogue) {
+      advanceDialogue();
+      return;
+    }
+    if (modalOpen) {
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+      const focused = document.activeElement;
+      if (focused instanceof HTMLButtonElement && dialog?.contains(focused))
+        focused.click();
+      else
+        dialog
+          ?.querySelector<HTMLButtonElement>(
+            "[data-game-choice], .battle-actions button:not(:disabled), button:not(.close):not(:disabled)",
+          )
+          ?.click();
+      return;
+    }
+    talk();
+  }
+  function back() {
+    if (!sessionReady) return;
+    if (dialogue) {
+      setDialogue(null);
+      return;
+    }
+    if (battle) {
+      if (battle.done) setBattle(null);
+      else
+        document
+          .querySelector<HTMLButtonElement>("[data-back-action]")
+          ?.focus();
+      return;
+    }
+    setPanel(panel === "menu" ? null : "menu");
+  }
+  function advanceDialogue() {
+    if (!dialogue) return;
+    if (dialogue.index + 1 < dialogue.lines.length)
+      setDialogue({ ...dialogue, index: dialogue.index + 1 });
+    else setDialogue(null);
+  }
   function action(kind: BattleAction) {
     if (!save || !battle) return;
     const result = resolveBattle(save, battle, kind);
@@ -420,191 +466,194 @@ function GameSession({ account }: { account: Account | null }) {
         t.updatedAt && (now || Date.now()) - t.updatedAt.toMillis() < 120000,
     ),
     lead = save.team[0];
+  const panelTitles: Record<NonNullable<Panel>, string> = {
+    menu: "Your adventure",
+    team: "Your companions",
+    quest: "A few new friends",
+    trainers: "Fellow explorers",
+    map: "The Solara region",
+    guide: "A field guide to new friends",
+    bag: "A few things for the road",
+    settings: "Your trainer account",
+  };
   return (
-    <div className="app-shell">
-      <div inert={modalOpen}>
-        <header>
-          <a className="brand" href="/" aria-label="Bosmon home">
-            <span className="brand-icon">
-              <Leaf size={25} />
-            </span>
-            bosmon<span className="brand-dot">.</span>
-          </a>
-          <nav aria-label="Main navigation">
-            {[
-              { id: "explore", label: "Explore", icon: Compass },
-              { id: "guide", label: "Field guide", icon: BookOpen },
-              { id: "map", label: "World map", icon: Map },
-            ].map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                className={tab === id ? "nav-active" : ""}
-                onClick={() => {
-                  setTab(id);
-                  setPanel(id === "explore" ? null : (id as Panel));
-                }}
-              >
-                <Icon size={17} />
-                {label}
-              </button>
-            ))}
-          </nav>
-          <div className="header-right">
-            <button
-              className="subtle-button"
-              onClick={() => setPanel("settings")}
-            >
-              {account && !account.isAnonymous ? "Account" : "Sign in"}
-            </button>
-            <span className="connection">
-              <i className={cloud.startsWith("Online") ? "connected" : ""} />
-              {cloud}
-            </span>
-            <button
-              className="avatar"
-              onClick={() => setPanel("settings")}
-              aria-label="Trainer settings"
-            >
-              {save.name.slice(0, 1).toUpperCase()}
-            </button>
+    <main className={styles.screen}>
+      <div className={styles.world} inert={modalOpen}>
+        <World save={save} trainers={active} onMove={step} />
+        <div className={styles.hud}>
+          <div className={styles.location}>
+            <span>SOLARA · {TOWNS.has(region) ? "TOWN" : "WILD ROUTE"}</span>
+            <h1>{REGIONS[region]}</h1>
+            <small>
+              <i className="live-dot" />
+              {account
+                ? `${active.length} fellow explorers`
+                : "Local adventure"}{" "}
+              · {save.x}, {save.y}
+            </small>
           </div>
-        </header>
-        <main className="dashboard">
-          <div className="page-heading">
-            <div>
-              <div className="eyebrow">THE SOLARA REGION</div>
-              <h1>
-                A little world. A big adventure<span>.</span>
-              </h1>
-              <p>Take the scenic route. You never know who you’ll meet.</p>
+          <button
+            className={styles.menuButton}
+            onClick={() => setPanel("menu")}
+            aria-label="Open game menu"
+          >
+            <Menu size={19} />
+            <span>Menu</span>
+            <kbd>K</kbd>
+          </button>
+        </div>
+        <div className={styles.toast} role="status">
+          {notice}
+        </div>
+        <div className={styles.keyHints}>
+          <kbd>WASD</kbd>
+          <span>/ arrows · Move</span>
+          <kbd>J</kbd>
+          <span>Interact / confirm</span>
+          <kbd>K</kbd>
+          <span>Menu / back</span>
+        </div>
+        <button
+          className={styles.lead}
+          onClick={() => setPanel("team")}
+          aria-label="Open your companions"
+        >
+          <Sprite species={lead.species} size={54} />
+          <div>
+            <strong>
+              {SPECIES[lead.species].name}
+              <em>Lv. {lead.level}</em>
+            </strong>
+            <div className="hp-track">
+              <span style={{ width: `${(lead.hp / maxHp(lead)) * 100}%` }} />
             </div>
-            <button className="subtle-button" onClick={() => setPanel("bag")}>
-              <Backpack size={17} /> Your bag{" "}
-              <span>{save.orbs + save.potions}</span>
-            </button>
+            <small>
+              {lead.hp} / {maxHp(lead)} HP
+            </small>
           </div>
-          <div className="game-layout">
-            <section className="explore-column">
-              <div className="world-card">
-                <div className="world-toolbar">
-                  <div>
-                    <span className="location-marker">
-                      <Compass size={19} />
-                    </span>
-                    <div>
-                      <h2>{REGIONS[region]}</h2>
-                      <span>
-                        {TOWNS.has(region)
-                          ? "A cozy place to begin again"
-                          : "Wild encounters await"}{" "}
-                        <b>·</b> Solara {String(region + 1).padStart(2, "0")}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="weather">
-                    ☀ <span>A lovely day</span>
-                  </span>
-                </div>
-                <div className="world-container">
-                  <World save={save} trainers={active} onMove={step} />
-                  <div className="map-label">
-                    <span className="live-dot" /> {REGIONS[region]}{" "}
-                    <span>
-                      {" "}
-                      / {save.x}, {save.y}
-                    </span>
-                  </div>
-                  <button
-                    className="map-expand"
-                    onClick={() => setPanel("map")}
-                    aria-label="Open world map"
-                  >
-                    <Map size={19} />
-                  </button>
-                  <div className="world-hint">
-                    <Leaf size={13} /> Step into tall grass to meet wild Bosmon
-                  </div>
-                </div>
-                <div className="world-footer">
+        </button>
+      </div>
+      <GameControls
+        onDirection={direction}
+        onConfirm={confirm}
+        onBack={back}
+        mode={
+          battle
+            ? `battle-${battle.done}`
+            : dialogue
+              ? "dialogue"
+              : (panel ?? "world")
+        }
+        enabled={sessionReady}
+      />
+      {panel && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            setPanel(null);
+          }}
+        >
+          <section
+            className={`modal ${panel === "guide" ? "wide" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={panelTitles[panel]}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="close"
+              onClick={() => {
+                setPanel(null);
+              }}
+              aria-label="Close"
+            >
+              <X />
+            </button>
+            <div className="eyebrow">YOUR ADVENTURE, YOUR PACE</div>
+            <h2>{panelTitles[panel]}</h2>
+            {panel === "menu" && (
+              <>
+                <div className={styles.menuSummary}>
                   <span>
-                    <kbd>W</kbd>
-                    <kbd>A</kbd>
-                    <kbd>S</kbd>
-                    <kbd>D</kbd> <span>move</span>
-                    <b>·</b>
-                    <kbd>E</kbd> <span>interact</span>
+                    {save.name} · {save.coins} coins
                   </span>
-                  <button onClick={talk}>
-                    <MessageCircle size={16} /> Talk to a guide
+                  <span>
+                    {save.caught.length}/8 species · {save.visited.length}/25
+                    places
+                  </span>
+                </div>
+                <div className={styles.menuOptions}>
+                  {(
+                    [
+                      {
+                        id: "team",
+                        label: "Companions",
+                        Icon: Heart,
+                        count: save.team.length,
+                      },
+                      {
+                        id: "bag",
+                        label: "Bag",
+                        Icon: Backpack,
+                        count: save.orbs + save.potions,
+                      },
+                      {
+                        id: "guide",
+                        label: "Field guide",
+                        Icon: BookOpen,
+                        count: save.caught.length,
+                      },
+                      {
+                        id: "map",
+                        label: "World map",
+                        Icon: Map,
+                        count: save.visited.length,
+                      },
+                      {
+                        id: "quest",
+                        label: "Journal",
+                        Icon: Flag,
+                        count: save.questClaimed ? "✓" : "1",
+                      },
+                      {
+                        id: "trainers",
+                        label: "Explorers",
+                        Icon: Users,
+                        count: active.length,
+                      },
+                      {
+                        id: "settings",
+                        label:
+                          account && !account.isAnonymous
+                            ? "Account"
+                            : "Sign in",
+                        Icon: Settings,
+                        count: "",
+                      },
+                    ] as const
+                  ).map(({ id, label, Icon, count }) => (
+                    <button
+                      data-game-choice
+                      key={id}
+                      onClick={() => setPanel(id)}
+                    >
+                      <Icon size={18} />
+                      {label}
+                      <small>{count}</small>
+                    </button>
+                  ))}
+                  <button onClick={() => setPanel(null)}>
+                    <ArrowRight size={18} />
+                    Keep exploring
                   </button>
                 </div>
-              </div>
-              <div className="mobile-controls">
-                <button onClick={() => step(-1, 0)} aria-label="Move left">
-                  <ArrowLeft />
-                </button>
-                <button onClick={() => step(0, -1)} aria-label="Move up">
-                  <ArrowUp />
-                </button>
-                <button onClick={() => step(0, 1)} aria-label="Move down">
-                  <ArrowDown />
-                </button>
-                <button onClick={() => step(1, 0)} aria-label="Move right">
-                  <ArrowRight />
-                </button>
-              </div>
-              <div className="below-map">
-                <div className="quest">
-                  <div className="quest-icon">
-                    <Flag size={22} />
-                  </div>
-                  <div>
-                    <div className="eyebrow">YOUR NEXT CHAPTER</div>
-                    <h3>A few new friends</h3>
-                    <p>Discover 3 different Bosmon species.</p>
-                    <div className="quest-progress">
-                      <span
-                        style={{
-                          width: `${Math.min(save.caught.length / 3, 1) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    disabled={save.caught.length < 3 || save.questClaimed}
-                    onClick={() => {
-                      setSave({
-                        ...save,
-                        questClaimed: true,
-                        coins: save.coins + 100,
-                        orbs: save.orbs + 10,
-                      });
-                      setNotice(
-                        "Research reward: 100 coins and 10 capture orbs!",
-                      );
-                    }}
-                  >
-                    {save.questClaimed ? (
-                      <Check size={18} />
-                    ) : save.caught.length >= 3 ? (
-                      "Claim reward"
-                    ) : (
-                      `${save.caught.length} / 3`
-                    )}
-                  </button>
-                </div>
-                <div className="field-note">
-                  <Sparkles size={18} />
-                  <div className="eyebrow">A LITTLE FIELD NOTE</div>
-                  <p>
-                    “The best companion isn’t always the strongest. Sometimes,
-                    it’s the one that stays.”
-                  </p>
-                  <span>— Mira, Willowbrook keeper</span>
-                </div>
-              </div>
-            </section>
-            <aside>
+                <p className="muted">
+                  WASD / arrows to select · J to confirm · K to go back. Your
+                  adventure saves automatically.
+                </p>
+              </>
+            )}
+            {panel === "team" && (
               <section className="team-card">
                 <div className="section-heading">
                   <h2>
@@ -664,6 +713,8 @@ function GameSession({ account }: { account: Account | null }) {
                   Meet your field guide <ChevronRight size={16} />
                 </button>
               </section>
+            )}
+            {panel === "trainers" && (
               <section className="trainers-card">
                 <div className="section-heading">
                   <h2>
@@ -704,78 +755,48 @@ function GameSession({ account }: { account: Account | null }) {
                   pace.
                 </div>
               </section>
-              <div className="journey-stats">
-                <div>
-                  <strong>
-                    {save.caught.length}
-                    <span> / 8</span>
-                  </strong>
-                  <small>SPECIES FOUND</small>
+            )}
+            {panel === "quest" && (
+              <div className="quest">
+                <div className="quest-icon">
+                  <Flag size={22} />
                 </div>
                 <div>
-                  <strong>
-                    {save.visited.length}
-                    <span> / 25</span>
-                  </strong>
-                  <small>PLACES VISITED</small>
+                  <div className="eyebrow">YOUR NEXT CHAPTER</div>
+                  <h3>A few new friends</h3>
+                  <p>Discover 3 different Bosmon species.</p>
+                  <div className="quest-progress">
+                    <span
+                      style={{
+                        width: `${Math.min(save.caught.length / 3, 1) * 100}%`,
+                      }}
+                    />
+                  </div>
                 </div>
+                <button
+                  disabled={save.caught.length < 3 || save.questClaimed}
+                  onClick={() => {
+                    setSave({
+                      ...save,
+                      questClaimed: true,
+                      coins: save.coins + 100,
+                      orbs: save.orbs + 10,
+                    });
+                    setNotice(
+                      "Research reward: 100 coins and 10 capture orbs!",
+                    );
+                  }}
+                >
+                  {save.questClaimed ? (
+                    <Check size={18} />
+                  ) : save.caught.length >= 3 ? (
+                    "Claim reward"
+                  ) : (
+                    `${save.caught.length} / 3`
+                  )}
+                </button>
               </div>
-            </aside>
-          </div>
-          <footer>
-            <span>
-              <Leaf size={14} /> Made for the joy of discovery.
-            </span>
-            <span role="status">{notice}</span>
-            <button aria-label="Settings" onClick={() => setPanel("settings")}>
-              <Settings size={16} />
-            </button>
-          </footer>
-        </main>
-      </div>
-      {panel && (
-        <div
-          className="modal-backdrop"
-          onClick={() => {
-            setPanel(null);
-            setTab("explore");
-          }}
-        >
-          <section
-            className={`modal ${panel === "guide" ? "wide" : ""}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label={
-              panel === "map"
-                ? "World map"
-                : panel === "guide"
-                  ? "Field guide"
-                  : panel === "bag"
-                    ? "Your bag"
-                    : "Settings"
-            }
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="close"
-              onClick={() => {
-                setPanel(null);
-                setTab("explore");
-              }}
-              aria-label="Close"
-            >
-              <X />
-            </button>
-            <div className="eyebrow">YOUR ADVENTURE, YOUR PACE</div>
-            <h2>
-              {panel === "map"
-                ? "The Solara region"
-                : panel === "guide"
-                  ? "A field guide to new friends"
-                  : panel === "bag"
-                    ? "A few things for the road"
-                    : "Hello, explorer."}
-            </h2>
+            )}
             {panel === "map" && (
               <>
                 <p>
@@ -941,13 +962,7 @@ function GameSession({ account }: { account: Account | null }) {
             <div className="eyebrow">{dialogue.name}</div>
             <p>{dialogue.lines[dialogue.index]}</p>
           </div>
-          <button
-            onClick={() =>
-              dialogue.index + 1 < dialogue.lines.length
-                ? setDialogue({ ...dialogue, index: dialogue.index + 1 })
-                : setDialogue(null)
-            }
-          >
+          <button onClick={advanceDialogue}>
             {dialogue.index + 1 < dialogue.lines.length ? "Next" : "See you"}{" "}
             <ChevronRight size={16} />
           </button>
@@ -1017,7 +1032,7 @@ function GameSession({ account }: { account: Account | null }) {
                 <button onClick={() => action("heal")} disabled={!save.potions}>
                   <Heart size={17} /> Potion · {save.potions}
                 </button>
-                <button onClick={() => action("run")}>
+                <button data-back-action onClick={() => action("run")}>
                   Run away <ArrowRight size={17} />
                 </button>
               </div>
@@ -1025,6 +1040,6 @@ function GameSession({ account }: { account: Account | null }) {
           </section>
         </div>
       )}
-    </div>
+    </main>
   );
 }

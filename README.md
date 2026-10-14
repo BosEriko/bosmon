@@ -11,7 +11,11 @@ npm run dev
 
 Open http://localhost:3000. Local play works without Firebase.
 
-Move with WASD, arrow keys, touch controls, or by clicking a direction on the map. Walk through dark grass to encounter monsters. Attack to weaken them, throw capture orbs, and earn experience by catching or winning battles. Press E or select “Talk to a guide” within two tiles of a guide. Town keepers heal your companions. Select a companion to make it your lead.
+The world fills the browser viewport, with no dashboard or page scrolling. Move with **WASD / arrow keys**, the touch D-pad, or by clicking a direction on the map. Hold a direction to keep moving. Press **J** to talk to a nearby guide, advance dialogue, or confirm the selected menu/battle action. Press **K** to open the game menu or go back; during a battle, K selects Run away and J confirms it. E and Escape remain aliases for J and K. Directional keys also move focus through menu actions. These shortcuts do not intercept typing in account fields.
+
+On phones, portrait mode puts the world above a handheld D-pad and J/K controls. Short landscape screens put compact controls in the lower corners. The layout uses dynamic viewport height and safe-area insets, following the mobile-control patterns in the `../arcade.twiswua.com` source. Releasing a direction, cancelling a touch, leaving the window, or opening a menu stops held movement.
+
+Walk through dark grass to encounter monsters. Attack to weaken them, throw capture orbs, and earn experience by catching or winning battles. Town keepers heal your companions when you interact within two tiles. Open **Menu → Companions** to change your lead. The menu also contains the bag, field guide, world map, journal/research reward, fellow explorers, and account settings.
 
 The connected Solara region contains 10 towns and 15 routes on a 160 × 120 tile world. There are eight original species, a collection quest, a supply shop, a field guide, and automatic browser saves. Buildings and water are obstacles; interiors, swimming, PvP, trading, evolution, and a full campaign are not implemented. The region is a playable foundation, not equivalent to the first Pokémon game's authored content.
 
@@ -25,7 +29,7 @@ The connected Solara region contains 10 towns and 15 routes on a 160 × 120 tile
 6. Add your localhost and production domain to Firebase Authentication's authorized domains if needed.
 7. Restart the development server after changing environment variables.
 
-Use **Sign in** in the header or open trainer settings to register with email/password, sign in with Google, reset a password, or sign out. Google sign-in uses a popup; allow popups for the site.
+Open **Menu → Sign in** (or **Account** when already signed in) to register with email/password, sign in with Google, reset a password, or sign out. Google sign-in uses a popup; allow popups for the site.
 
 Once signed in, the client writes its private save under `saves/{uid}`, and publishes its trainer name, world position, species count, highest level, and heartbeat under `trainers/{uid}`. Active trainers appear on the map and in the explorer list. Changed state syncs at most once per 1.5 seconds, with a heartbeat every 30 seconds. Trainers are considered active for two minutes after their last heartbeat. The list is limited to the 30 most recently updated trainers.
 
