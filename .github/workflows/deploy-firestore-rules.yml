@@ -20,7 +20,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+      FIREBASE_PROJECT_ID: bosmon-boseriko-com
       FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -31,8 +31,8 @@ jobs:
 
       - name: Check deployment configuration
         run: |
-          if [ -z "$FIREBASE_PROJECT_ID" ] || [ -z "$FIREBASE_TOKEN" ]; then
-            echo "Set the FIREBASE_PROJECT_ID repository variable and FIREBASE_TOKEN repository secret."
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "Set the FIREBASE_TOKEN repository secret."
             exit 1
           fi
 

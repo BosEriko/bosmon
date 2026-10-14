@@ -46,9 +46,10 @@ The workflow `.github/workflows/deploy-firestore-rules.yml` follows the deployme
 In the Bosmon GitHub repository, open **Settings → Secrets and variables → Actions** and add:
 
 - **Secret** `FIREBASE_TOKEN`: a Firebase CLI CI token with access to Bosmon’s Firebase project, following the same setup as `life`.
-- **Variable** `FIREBASE_PROJECT_ID`: Bosmon’s Firebase project ID.
 
-Push changes to `firestore.rules`, `firebase.json`, or the workflow itself to `main` to deploy automatically. For the first deployment or a retry, open **Actions → Deploy Firestore rules → Run workflow**. The workflow validates that both settings exist before deploying. It only deploys Firestore rules; it does not deploy the website or configure authentication providers.
+The Firebase project ID is hardcoded in the workflow as `bosmon-boseriko-com`; no repository variable is needed.
+
+Push changes to `firestore.rules`, `firebase.json`, or the workflow itself to `main` to deploy automatically. For the first deployment or a retry, open **Actions → Deploy Firestore rules → Run workflow**. The workflow validates that the token secret exists before deploying. It only deploys Firestore rules; it does not deploy the website or configure authentication providers.
 
 ## Vercel
 
