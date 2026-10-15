@@ -66,3 +66,17 @@ Changed files: `components/Game.tsx`, `components/World.tsx`, `app/layout.tsx`, 
 Controls: WASD/arrows move or select; J interacts/confirms; K opens the menu/goes back. In battles K selects Run away and J confirms, rather than fleeing on an accidental back press. E/Escape remain aliases. On mobile the D-pad supports held movement, and J/K buttons work in world, dialogue, menus, and battles.
 
 Final status: implementation and automated checks finished; full visual/device verification remains incomplete because no browser was connected. The game fills the browser viewport; it does not force the browser into the operating system’s exclusive fullscreen mode.
+
+# Main player sprite and directional walking
+
+Replaced the main player’s rectangle-based drawing with an original generated explorer sprite sheet: rust cap/jacket, cream shirt, dark trousers, boots, and an olive backpack. Added south/west/east/north sprite rows, a walking frame cycle, idle poses that preserve facing, and reduced-motion handling. NPC and remote-player artwork is unchanged.
+
+Files: `components/World.tsx`, `lib/player-sprite.ts`, `tests/player-sprite.test.ts`, `public/art/player.png`, `public/art/PLAYER-PROMPT.md`, and README art documentation.
+
+- PASS: generated atlas visually inspected; all four facing directions and walking poses are present. PNG dimensions are 1254 × 1254 with alpha transparency.
+- PASS: 30 automated tests, including seven player-animation tests covering all directions, frame progression, turning, stopping, unchanged positions, teleporting, and reduced motion.
+- PASS: TypeScript and production build.
+- Code review: animation callbacks are cancelled on cleanup; image handlers and motion-preference listeners are cleaned up; the existing player rendering remains as an image-loading/failure fallback. Terrain is cached on a separate canvas for each world-state change and reused during frame animation.
+- UNVERIFIED: real-browser animation timing, final in-game scale and alignment. No browser was connected. Unit tests validate the animation logic, not rendered pixels.
+
+Final status: sprite and directional-animation implementation finished; live visual verification remains incomplete. The original generated atlas and generation prompt are stored in the project.

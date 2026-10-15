@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { regionAt, Save, tileAt, TOWNS } from "@/lib/game";
 import type { Trainer } from "@/lib/firebase";
 import { worldViewport } from "@/lib/controls";
+import { initialMotion, updateMotion, playerFrame } from "@/lib/player-sprite";
 const SIZE = 24;
 export default function World({
   save,
@@ -14,6 +15,22 @@ export default function World({
   onMove: (dx: number, dy: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const motion = useRef(initialMotion(save.x, save.y));
+  const [spriteSheet, setSpriteSheet] = useState<HTMLImageElement | null>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const image = new Image();
+    image.onload = () => setSpriteSheet(image);
+    image.src = "/art/player.png";
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setReducedMotion(preference.matches);
+    updatePreference();
+    preference.addEventListener("change", updatePreference);
+    return () => {
+      image.onload = null;
+      preference.removeEventListener("change", updatePreference);
+    };
+  }, []);
   const [viewport, setViewport] = useState(() => worldViewport(744, 504));
   useEffect(() => {
     const canvas = ref.current;
@@ -26,8 +43,20 @@ export default function World({
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
-    const ctx = ref.current?.getContext("2d");
+    const canvas = ref.current;
+    const output = canvas?.getContext("2d");
+    if (!canvas || !output) return;
+    const layer = document.createElement("canvas");
+    layer.width = viewport.width;
+    layer.height = viewport.height;
+    const ctx = layer.getContext("2d");
     if (!ctx) return;
+    motion.current = updateMotion(
+      motion.current,
+      save.x,
+      save.y,
+      performance.now(),
+    );
     ctx.imageSmoothingEnabled = false;
     const { cols, rows, width, height } = viewport;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -139,11 +168,40 @@ export default function World({
     for (const t of trainers)
       if (t.updatedAt && Date.now() - t.updatedAt.toMillis() < 120000)
         person(t.x, t.y, "#6988b3", t.name);
-    person(save.x, save.y, "#d97b4f");
-    ctx.strokeStyle = "#fff1c4";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(cx * 24 + 2, cy * 24 - 2, 21, 29);
-  }, [save, trainers, viewport]);
+    if (!spriteSheet) person(save.x, save.y, "#d97b4f");
+    const playerX = Math.floor((width - cols * SIZE) / 2) + cx * SIZE;
+    const playerY = Math.floor((height - rows * SIZE) / 2) + cy * SIZE;
+    let animation = 0;
+    const paint = (now: number) => {
+      output.setTransform(1, 0, 0, 1, 0, 0);
+      output.imageSmoothingEnabled = false;
+      output.clearRect(0, 0, width, height);
+      output.drawImage(layer, 0, 0);
+      const frame = playerFrame(motion.current, now, reducedMotion);
+      if (spriteSheet) {
+        output.fillStyle = "#354c3b40";
+        output.beginPath();
+        output.ellipse(playerX + 12, playerY + 21, 7, 3, 0, 0, Math.PI * 2);
+        output.fill();
+        const cellWidth = spriteSheet.naturalWidth / 4,
+          cellHeight = spriteSheet.naturalHeight / 4;
+        output.drawImage(
+          spriteSheet,
+          frame.column * cellWidth,
+          frame.row * cellHeight,
+          cellWidth,
+          cellHeight,
+          playerX - 4,
+          playerY - 9,
+          32,
+          32,
+        );
+      }
+      if (frame.walking) animation = requestAnimationFrame(paint);
+    };
+    paint(performance.now());
+    return () => cancelAnimationFrame(animation);
+  }, [save, trainers, viewport, spriteSheet, reducedMotion]);
   return (
     <canvas
       ref={ref}

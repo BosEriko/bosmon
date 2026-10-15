@@ -71,7 +71,7 @@ Tests also cover account storage separation, local/cloud save selection, and aut
 
 ## Art
 
-`public/art/monsters.png` is an original generated transparent monster atlas, used directly with CSS sprite positioning. It was created using the built-in image generation tool. The generation prompt is preserved in `public/art/PROMPT.md`. World terrain and trainer pixel sprites are drawn in Canvas by `components/World.tsx`.
+`public/art/monsters.png` is an original generated transparent monster atlas, used directly with CSS sprite positioning. It was created using the built-in image generation tool. The generation prompt is preserved in `public/art/PROMPT.md`. World terrain and NPC/remote trainer sprites are drawn in Canvas by `components/World.tsx`. The main player uses `public/art/player.png`, a generated four-direction sprite atlas with walking frames and directional idle poses. Its generation prompt is saved in `public/art/PLAYER-PROMPT.md`. Walking uses WASD, arrow keys, and the touch D-pad; reduced-motion preferences disable the frame cycle while preserving facing direction.
 
 ## Current verification limits
 
