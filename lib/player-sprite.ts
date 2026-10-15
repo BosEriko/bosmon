@@ -50,3 +50,12 @@ export function playerFrame(
     walking,
   };
 }
+
+export function playerSourceFrame(row: number, column: number) {
+  return {
+    x: [20, 326, 632, 938][column],
+    y: [25, 315, 605, 895][row],
+    width: 300,
+    height: 300,
+  };
+}

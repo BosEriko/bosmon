@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialMotion, updateMotion, playerFrame } from "../lib/player-sprite";
+import {
+  initialMotion,
+  updateMotion,
+  playerFrame,
+  playerSourceFrame,
+} from "../lib/player-sprite";
 test("player starts idle facing south", () => {
   assert.deepEqual(playerFrame(initialMotion(16, 12), 0), {
     row: 0,
@@ -64,4 +69,13 @@ test("reduced motion preserves facing but disables the walking cycle", () => {
     column: 0,
     walking: false,
   });
+});
+
+test("east-facing frames exclude the north-facing row below them", () => {
+  for (let column = 0; column < 4; column++) {
+    const source = playerSourceFrame(2, column);
+    assert.ok(source.y <= 656);
+    assert.ok(source.y + source.height > 881);
+    assert.ok(source.y + source.height < 940);
+  }
 });

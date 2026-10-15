@@ -3,8 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { regionAt, Save, tileAt, TOWNS } from "@/lib/game";
 import type { Trainer } from "@/lib/firebase";
 import { worldViewport } from "@/lib/controls";
-import { initialMotion, updateMotion, playerFrame } from "@/lib/player-sprite";
+import {
+  initialMotion,
+  updateMotion,
+  playerFrame,
+  playerSourceFrame,
+} from "@/lib/player-sprite";
+import { initialCamera, updateCamera, cameraPosition } from "@/lib/camera";
 const SIZE = 24;
+const PADDING = SIZE * 2;
 export default function World({
   save,
   trainers,
@@ -16,12 +23,13 @@ export default function World({
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const motion = useRef(initialMotion(save.x, save.y));
+  const camera = useRef(initialCamera(save.x, save.y));
   const [spriteSheet, setSpriteSheet] = useState<HTMLImageElement | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     const image = new Image();
     image.onload = () => setSpriteSheet(image);
-    image.src = "/art/player.png";
+    image.src = "/art/player-chibi.png";
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updatePreference = () => setReducedMotion(preference.matches);
     updatePreference();
@@ -47,8 +55,8 @@ export default function World({
     const output = canvas?.getContext("2d");
     if (!canvas || !output) return;
     const layer = document.createElement("canvas");
-    layer.width = viewport.width;
-    layer.height = viewport.height;
+    layer.width = viewport.width + PADDING * 2;
+    layer.height = viewport.height + PADDING * 2;
     const ctx = layer.getContext("2d");
     if (!ctx) return;
     motion.current = updateMotion(
@@ -57,13 +65,20 @@ export default function World({
       save.y,
       performance.now(),
     );
+    camera.current = updateCamera(
+      camera.current,
+      save.x,
+      save.y,
+      performance.now(),
+      reducedMotion,
+    );
     ctx.imageSmoothingEnabled = false;
     const { cols, rows, width, height } = viewport;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.translate(
-      Math.floor((width - cols * SIZE) / 2),
-      Math.floor((height - rows * SIZE) / 2),
+      PADDING + Math.floor((width - cols * SIZE) / 2),
+      PADDING + Math.floor((height - rows * SIZE) / 2),
     );
     const cx = Math.floor(cols / 2),
       cy = Math.floor(rows / 2);
@@ -73,8 +88,8 @@ export default function World({
       ctx.fillStyle = c;
       ctx.fillRect(x, y, w, h);
     };
-    for (let row = 0; row < rows; row++)
-      for (let col = 0; col < cols; col++) {
+    for (let row = -2; row < rows + 2; row++)
+      for (let col = -2; col < cols + 2; col++) {
         const wx = ox + col,
           wy = oy + row,
           x = col * SIZE,
@@ -142,10 +157,32 @@ export default function World({
           }
         }
       }
-    const person = (wx: number, wy: number, color: string, label?: string) => {
+    const person = (
+      wx: number,
+      wy: number,
+      color: string,
+      label?: string,
+      painter = ctx,
+    ) => {
+      const rect = (
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        color: string,
+      ) => {
+        painter.fillStyle = color;
+        painter.fillRect(x, y, w, h);
+      };
       const x = (wx - ox) * 24,
         y = (wy - oy) * 24;
-      if (x < 0 || y < 0 || x > cols * SIZE || y > rows * SIZE) return;
+      if (
+        x < -PADDING ||
+        y < -PADDING ||
+        x > cols * SIZE + PADDING ||
+        y > rows * SIZE + PADDING
+      )
+        return;
       rect(x + 5, y + 21, 15, 3, "#789864");
       rect(x + 8, y + 15, 4, 7, "#3d4d51");
       rect(x + 15, y + 15, 4, 7, "#3d4d51");
@@ -155,10 +192,10 @@ export default function World({
       rect(x + 5, y + 5, 17, 2, color);
       rect(x + 16, y + 8, 2, 2, "#364b44");
       if (label) {
-        ctx.font = "bold 9px monospace";
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#fff9e5";
-        ctx.fillText(label, x + 12, y - 5);
+        painter.font = "bold 9px monospace";
+        painter.textAlign = "center";
+        painter.fillStyle = "#fff9e5";
+        painter.fillText(label, x + 12, y - 5);
       }
     };
     const r = regionAt(save.x, save.y),
@@ -168,7 +205,7 @@ export default function World({
     for (const t of trainers)
       if (t.updatedAt && Date.now() - t.updatedAt.toMillis() < 120000)
         person(t.x, t.y, "#6988b3", t.name);
-    if (!spriteSheet) person(save.x, save.y, "#d97b4f");
+
     const playerX = Math.floor((width - cols * SIZE) / 2) + cx * SIZE;
     const playerY = Math.floor((height - rows * SIZE) / 2) + cy * SIZE;
     let animation = 0;
@@ -176,28 +213,39 @@ export default function World({
       output.setTransform(1, 0, 0, 1, 0, 0);
       output.imageSmoothingEnabled = false;
       output.clearRect(0, 0, width, height);
-      output.drawImage(layer, 0, 0);
+      const position = cameraPosition(camera.current, now);
+      output.drawImage(
+        layer,
+        Math.round((save.x - position.x) * SIZE) - PADDING,
+        Math.round((save.y - position.y) * SIZE) - PADDING,
+      );
       const frame = playerFrame(motion.current, now, reducedMotion);
+      if (!spriteSheet) {
+        output.save();
+        output.translate(playerX - cx * SIZE, playerY - cy * SIZE);
+        person(save.x, save.y, "#d97b4f", undefined, output);
+        output.restore();
+      }
       if (spriteSheet) {
         output.fillStyle = "#354c3b40";
         output.beginPath();
         output.ellipse(playerX + 12, playerY + 21, 7, 3, 0, 0, Math.PI * 2);
         output.fill();
-        const cellWidth = spriteSheet.naturalWidth / 4,
-          cellHeight = spriteSheet.naturalHeight / 4;
+        const source = playerSourceFrame(frame.row, frame.column);
         output.drawImage(
           spriteSheet,
-          frame.column * cellWidth,
-          frame.row * cellHeight,
-          cellWidth,
-          cellHeight,
+          source.x,
+          source.y,
+          source.width,
+          source.height,
           playerX - 4,
           playerY - 9,
           32,
           32,
         );
       }
-      if (frame.walking) animation = requestAnimationFrame(paint);
+      if (frame.walking || position.moving)
+        animation = requestAnimationFrame(paint);
     };
     paint(performance.now());
     return () => cancelAnimationFrame(animation);
