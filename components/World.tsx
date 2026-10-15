@@ -25,17 +25,22 @@ export default function World({
   const motion = useRef(initialMotion(save.x, save.y));
   const camera = useRef(initialCamera(save.x, save.y));
   const [spriteSheet, setSpriteSheet] = useState<HTMLImageElement | null>(null);
+  const [npcSheet, setNpcSheet] = useState<HTMLImageElement | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     const image = new Image();
     image.onload = () => setSpriteSheet(image);
     image.src = "/art/player-chibi.png";
+    const npcs = new Image();
+    npcs.onload = () => setNpcSheet(npcs);
+    npcs.src = "/art/npcs-chibi.png";
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updatePreference = () => setReducedMotion(preference.matches);
     updatePreference();
     preference.addEventListener("change", updatePreference);
     return () => {
       image.onload = null;
+      npcs.onload = null;
       preference.removeEventListener("change", updatePreference);
     };
   }, []);
@@ -163,6 +168,7 @@ export default function World({
       color: string,
       label?: string,
       painter = ctx,
+      npcFrame?: number,
     ) => {
       const rect = (
         x: number,
@@ -183,14 +189,32 @@ export default function World({
         y > rows * SIZE + PADDING
       )
         return;
-      rect(x + 5, y + 21, 15, 3, "#789864");
-      rect(x + 8, y + 15, 4, 7, "#3d4d51");
-      rect(x + 15, y + 15, 4, 7, "#3d4d51");
-      rect(x + 6, y + 10, 15, 8, color);
-      rect(x + 8, y + 3, 11, 8, "#edc99c");
-      rect(x + 6, y + 1, 15, 5, color);
-      rect(x + 5, y + 5, 17, 2, color);
-      rect(x + 16, y + 8, 2, 2, "#364b44");
+      if (npcSheet && npcFrame !== undefined) {
+        painter.fillStyle = "#354c3b40";
+        painter.beginPath();
+        painter.ellipse(x + 12, y + 21, 7, 3, 0, 0, Math.PI * 2);
+        painter.fill();
+        painter.drawImage(
+          npcSheet,
+          npcFrame % 2 === 0 ? 82 : 579,
+          npcFrame < 2 ? 45 : 605,
+          600,
+          600,
+          x - 4,
+          y - 9,
+          32,
+          32,
+        );
+      } else {
+        rect(x + 5, y + 21, 15, 3, "#789864");
+        rect(x + 8, y + 15, 4, 7, "#3d4d51");
+        rect(x + 15, y + 15, 4, 7, "#3d4d51");
+        rect(x + 6, y + 10, 15, 8, color);
+        rect(x + 8, y + 3, 11, 8, "#edc99c");
+        rect(x + 6, y + 1, 15, 5, color);
+        rect(x + 5, y + 5, 17, 2, color);
+        rect(x + 16, y + 8, 2, 2, "#364b44");
+      }
       if (label) {
         painter.font = "bold 9px monospace";
         painter.textAlign = "center";
@@ -201,10 +225,17 @@ export default function World({
     const r = regionAt(save.x, save.y),
       rx = (r % 5) * 32,
       ry = Math.floor(r / 5) * 24;
-    person(rx + 19, ry + 12, TOWNS.has(r) ? "#8b739e" : "#c79b53");
+    person(
+      rx + 19,
+      ry + 12,
+      TOWNS.has(r) ? "#8b739e" : "#c79b53",
+      undefined,
+      ctx,
+      TOWNS.has(r) ? r % 2 : 2,
+    );
     for (const t of trainers)
       if (t.updatedAt && Date.now() - t.updatedAt.toMillis() < 120000)
-        person(t.x, t.y, "#6988b3", t.name);
+        person(t.x, t.y, "#6988b3", t.name, ctx, 3);
 
     const playerX = Math.floor((width - cols * SIZE) / 2) + cx * SIZE;
     const playerY = Math.floor((height - rows * SIZE) / 2) + cy * SIZE;
@@ -249,7 +280,7 @@ export default function World({
     };
     paint(performance.now());
     return () => cancelAnimationFrame(animation);
-  }, [save, trainers, viewport, spriteSheet, reducedMotion]);
+  }, [save, trainers, viewport, spriteSheet, npcSheet, reducedMotion]);
   return (
     <canvas
       ref={ref}
