@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { initialCamera, updateCamera, cameraPosition } from "../lib/camera";
+import {
+  initialCamera,
+  updateCamera,
+  cameraPosition,
+  clampCamera,
+} from "../lib/camera";
 
 test("camera scrolls through intermediate positions in all four directions", () => {
   for (const [dx, dy] of [
@@ -51,4 +56,17 @@ test("teleports and reduced motion snap to their destination", () => {
     cameraPosition(updateCamera(camera, 11, 10, 170, true), 170),
     { x: 11, y: 10, moving: false },
   );
+});
+test("camera stays inside the area and centres areas smaller than the view", () => {
+  assert.equal(clampCamera(2, 0, 31, 8), 8);
+  assert.equal(clampCamera(30, 0, 31, 8), 23);
+  assert.equal(clampCamera(15, 0, 31, 8), 15);
+  assert.equal(clampCamera(3, 0, 10, 8), 5);
+  assert.equal(clampCamera(40, 32, 63, 17), 47.5);
+});
+test("running tweens finish faster than walking tweens", () => {
+  const walk = updateCamera(initialCamera(0, 0), 1, 0, 0),
+    run = updateCamera(initialCamera(0, 0), 1, 0, 0, false, 75);
+  assert.equal(cameraPosition(walk, 75).moving, true);
+  assert.deepEqual(cameraPosition(run, 75), { x: 1, y: 0, moving: false });
 });

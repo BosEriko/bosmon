@@ -10,7 +10,7 @@ export default function GameControls({
   mode,
   enabled,
 }: {
-  onDirection: (dx: number, dy: number) => void;
+  onDirection: (dx: number, dy: number, run?: boolean) => void;
   onConfirm: () => void;
   onBack: () => void;
   mode: string;
@@ -18,6 +18,8 @@ export default function GameControls({
 }) {
   const callbacks = useRef({ onDirection, onConfirm, onBack, enabled });
   const held = useRef<{ source: string; direction: Direction } | null>(null);
+  const running = useRef(false);
+  const lastStep = useRef(0);
   const [pressed, setPressed] = useState<string | null>(null);
   useEffect(() => {
     callbacks.current = { onDirection, onConfirm, onBack, enabled };
@@ -36,6 +38,7 @@ export default function GameControls({
       (target.isContentEditable ||
         ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
     const down = (event: KeyboardEvent) => {
+      if (event.key === "Shift") running.current = true;
       if (
         !callbacks.current.enabled ||
         isEditing(event.target) ||
@@ -51,12 +54,19 @@ export default function GameControls({
       if (event.repeat) return;
       if (direction) {
         held.current = { source: event.code || event.key, direction };
-        callbacks.current.onDirection(direction[0], direction[1]);
+        running.current = event.shiftKey;
+        lastStep.current = performance.now();
+        callbacks.current.onDirection(
+          direction[0],
+          direction[1],
+          running.current,
+        );
       }
       if (action === "confirm") callbacks.current.onConfirm();
       if (action === "back") callbacks.current.onBack();
     };
     const up = (event: KeyboardEvent) => {
+      if (event.key === "Shift") running.current = false;
       if (held.current?.source === (event.code || event.key)) stop();
     };
     const focus = (event: FocusEvent) => {
@@ -66,19 +76,34 @@ export default function GameControls({
       if (document.hidden) stop();
     };
     const timer = setInterval(() => {
-      if (held.current && callbacks.current.enabled)
-        callbacks.current.onDirection(...held.current.direction);
-    }, 140);
+      const now = performance.now();
+      if (
+        !held.current ||
+        !callbacks.current.enabled ||
+        now - lastStep.current < (running.current ? 75 : 140)
+      )
+        return;
+      lastStep.current = now;
+      callbacks.current.onDirection(
+        held.current.direction[0],
+        held.current.direction[1],
+        running.current,
+      );
+    }, 15);
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
-    window.addEventListener("blur", stop);
+    const blur = () => {
+      running.current = false;
+      stop();
+    };
+    window.addEventListener("blur", blur);
     document.addEventListener("visibilitychange", hidden);
     document.addEventListener("focusin", focus);
     return () => {
       clearInterval(timer);
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", stop);
+      window.removeEventListener("blur", blur);
       document.removeEventListener("visibilitychange", hidden);
       document.removeEventListener("focusin", focus);
       held.current = null;
@@ -123,6 +148,7 @@ export default function GameControls({
                 direction,
               };
               setPressed(name);
+              lastStep.current = performance.now();
               callbacks.current.onDirection(direction[0], direction[1]);
             }}
             onPointerUp={release}

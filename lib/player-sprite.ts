@@ -37,6 +37,7 @@ export function playerFrame(
   motion: PlayerMotion,
   now: number,
   reducedMotion = false,
+  frameDuration = 90,
 ) {
   const walking = !reducedMotion && now - motion.lastStepAt < WALK_DURATION;
   const frames = [1, 0, 3, 2];
@@ -44,7 +45,8 @@ export function playerFrame(
     row: { south: 0, west: 1, east: 2, north: 3 }[motion.facing],
     column: walking
       ? frames[
-          Math.floor(Math.max(0, now - motion.startedAt) / 90) % frames.length
+          Math.floor(Math.max(0, now - motion.startedAt) / frameDuration) %
+            frames.length
         ]
       : 0,
     walking,

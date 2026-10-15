@@ -1,0 +1,15 @@
+# NPC walking atlases
+
+Generated with built-in `image_gen.imagegen`, transparent backgrounds, and `npcs-chibi.png` as the identity reference. Assets: `npc-walk-0.png` (purple guide), `npc-walk-1.png` (lavender guide), `npc-walk-2.png` (ranger). Each has south, west, east, north rows and four walking poses. Measured source rectangles are in `lib/npc-sprite.ts`.
+
+## Atlas 0
+
+Use case: identity-preserve. Create a walking sprite sheet for ONLY the top-left purple beret and purple vest town guide from the reference. Preserve their chibi proportions, colors, outfit and face. Exactly 4 columns by 4 rows, 16 sprites on transparent background. Rows south/front, west/left, east/right, north/back in that exact order. Columns neutral standing, left-foot stride, neutral passing, right-foot stride. All frames same scale, baseline and position within equal cells, large transparent gutters, no cropping or adjacent frame overlap. Chunky simple pixel-art, huge head tiny body, like the reference. Character occupies about 65% cell width and 75% cell height. North row shows back of head and outfit, no face. Side views face fully left/right. Distinct leg and arm swing. No text, no grid lines, no shadows or ground. Output only this character's complete 4x4 atlas.
+
+## Atlas 1
+
+Use case: identity-preserve. Create a walking sprite sheet for ONLY the top-right brown bob hair, lavender coat and cream scarf town guide from the reference. Preserve their chibi proportions, colors, outfit and face. Exactly 4 columns by 4 rows, 16 sprites on transparent background. Rows south/front, west/left, east/right, north/back in that exact order. Columns neutral standing, left-foot stride, neutral passing, right-foot stride. All frames same scale, baseline and position within equal cells, large transparent gutters, no cropping or adjacent frame overlap. Chunky simple pixel-art, huge head tiny body, like the reference. Character occupies about 65% cell width and 75% cell height. North row shows back of head and outfit, no face. Side views face fully left/right. Distinct leg and arm swing. No text, no grid lines, no shadows or ground. Output only this character's complete 4x4 atlas.
+
+## Atlas 2
+
+Use case: identity-preserve. Create a walking sprite sheet for ONLY the bottom-left ochre gold hat and jacket route ranger with olive backpack from the reference. Preserve their chibi proportions, colors, outfit and face. Exactly 4 columns by 4 rows, 16 sprites on transparent background. Rows south/front, west/left, east/right, north/back in that exact order. Columns neutral standing, left-foot stride, neutral passing, right-foot stride. All frames same scale, baseline and position within equal cells, large transparent gutters, no cropping or adjacent frame overlap. Chunky simple pixel-art, huge head tiny body, like the reference. Character occupies about 65% cell width and 75% cell height. North row shows back of head and outfit, no face. Side views face fully left/right. Distinct leg and arm swing. No text, no grid lines, no shadows or ground. Output only this character's complete 4x4 atlas.

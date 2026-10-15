@@ -110,6 +110,7 @@ export type Save = {
   wins: number;
   steps: number;
   questClaimed: boolean;
+  room: { x: number; y: number } | null;
 };
 export type Tile = "grass" | "wild" | "path" | "tree" | "water" | "house";
 export const regionAt = (x: number, y: number) =>
@@ -120,6 +121,7 @@ export function tileAt(x: number, y: number): Tile {
     b = y % 24,
     r = regionAt(x, y);
   if ((a >= 14 && a <= 17) || (b >= 11 && b <= 13)) return "path";
+  if (TOWNS.has(r) && b === 9 && (a === 9 || a === 25)) return "path";
   if (
     TOWNS.has(r) &&
     ((a >= 6 && a <= 10) || (a >= 22 && a <= 26)) &&
@@ -140,6 +142,60 @@ export function tileAt(x: number, y: number): Tile {
 }
 export const walkable = (x: number, y: number) =>
   ["grass", "wild", "path"].includes(tileAt(x, y));
+export const isDoor = (x: number, y: number) =>
+  tileAt(x, y) === "house" && y % 24 === 8 && (x % 32 === 9 || x % 32 === 25);
+export const ROOM_W = 11,
+  ROOM_H = 8,
+  ROOM_DOOR = { x: 5, y: 7 };
+export type RoomTile =
+  | "wall"
+  | "floor"
+  | "rug"
+  | "bed"
+  | "table"
+  | "shelf"
+  | "door"
+  | "void";
+export function roomTileAt(x: number, y: number): RoomTile {
+  if (x < 0 || y < 0 || x >= ROOM_W || y >= ROOM_H) return "void";
+  if (x === ROOM_DOOR.x && y === ROOM_DOOR.y) return "door";
+  if (x === 0 || y === 0 || x === ROOM_W - 1 || y === ROOM_H - 1)
+    return "wall";
+  if (y === 1 && x >= 1 && x <= 3) return "shelf";
+  if (x >= 8 && y <= 2) return "bed";
+  if (y === 3 && x >= 4 && x <= 6) return "table";
+  if (y >= 5 && x >= 4 && x <= 6) return "rug";
+  return "floor";
+}
+export const roomWalkable = (x: number, y: number) =>
+  ["floor", "rug"].includes(roomTileAt(x, y));
+export type Guide = { area: number; x: number; y: number };
+export const guideHome = (area: number): Guide => ({
+  area,
+  x: (area % 5) * REGION_W + 19,
+  y: Math.floor(area / 5) * REGION_H + 12,
+});
+export function wander(
+  guide: Guide,
+  dx: number,
+  dy: number,
+  player: { x: number; y: number },
+): Guide {
+  const home = guideHome(guide.area),
+    x = guide.x + dx,
+    y = guide.y + dy;
+  if (
+    Math.abs(dx) + Math.abs(dy) !== 1 ||
+    Math.abs(x - home.x) > 2 ||
+    Math.abs(y - home.y) > 2 ||
+    !walkable(x, y) ||
+    (x === player.x && y === player.y)
+  )
+    return guide;
+  return { ...guide, x, y };
+}
+export const sceneOf = (save: Pick<Save, "x" | "y" | "room">) =>
+  save.room ? `room:${save.x},${save.y}` : `area:${regionAt(save.x, save.y)}`;
 export const maxHp = (m: Pick<Monster, "level">) => 22 + m.level * 6;
 export const makeMonster = (species: number, level = 5): Monster => ({
   id: crypto.randomUUID(),
@@ -163,6 +219,7 @@ export const initialSave = (): Save => ({
   wins: 0,
   steps: 0,
   questClaimed: false,
+  room: null,
 });
 export function awardXp(monster: Monster, amount: number): Monster {
   let { level, xp, hp } = monster;
@@ -179,8 +236,31 @@ export function awardXp(monster: Monster, amount: number): Monster {
     hp: Math.min(hp, maxHp({ level })),
   };
 }
-export function move(save: Save, dx: number, dy: number): Save {
-  if (Math.abs(dx) + Math.abs(dy) !== 1 || !walkable(save.x + dx, save.y + dy))
+export function move(
+  save: Save,
+  dx: number,
+  dy: number,
+  blocked?: { x: number; y: number },
+): Save {
+  if (Math.abs(dx) + Math.abs(dy) !== 1) return save;
+  if (save.room) {
+    const x = save.room.x + dx,
+      y = save.room.y + dy;
+    if (x === ROOM_DOOR.x && y === ROOM_DOOR.y)
+      return { ...save, room: null, steps: save.steps + 1 };
+    if (!roomWalkable(x, y)) return save;
+    return { ...save, room: { x, y }, steps: save.steps + 1 };
+  }
+  if (dy === -1 && isDoor(save.x, save.y - 1))
+    return {
+      ...save,
+      room: { x: ROOM_DOOR.x, y: ROOM_DOOR.y - 1 },
+      steps: save.steps + 1,
+    };
+  if (
+    !walkable(save.x + dx, save.y + dy) ||
+    (blocked && blocked.x === save.x + dx && blocked.y === save.y + dy)
+  )
     return save;
   const x = save.x + dx,
     y = save.y + dy,
@@ -233,5 +313,15 @@ export function parseSave(raw: unknown): Save | null {
     !s.visited.every((v) => int(v, 0, 24))
   )
     return null;
-  return s;
+  const room = s.room ?? null;
+  if (
+    room !== null &&
+    (typeof room !== "object" ||
+      !int(room.x, 0, ROOM_W - 1) ||
+      !int(room.y, 0, ROOM_H - 1) ||
+      !roomWalkable(room.x, room.y) ||
+      !isDoor(s.x, s.y - 1))
+  )
+    return null;
+  return { ...s, room };
 }

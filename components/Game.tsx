@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  Guide,
+  guideHome,
   initialSave,
   makeMonster,
   maxHp,
@@ -26,9 +28,11 @@ import {
   REGIONS,
   regionAt,
   Save,
+  sceneOf,
   SPECIES,
   tileAt,
   TOWNS,
+  wander,
 } from "@/lib/game";
 import {
   cloudEnabled,
@@ -131,12 +135,17 @@ function GameSession({ account }: { account: Account | null }) {
     [notice, setNotice] = useState(
       "A new adventure starts with a little curiosity.",
     ),
-    [now, setNow] = useState(0);
+    [now, setNow] = useState(0),
+    [fading, setFading] = useState(false),
+    [running, setRunning] = useState(false),
+    [guide, setGuide] = useState<Guide | null>(null);
   const cloudRef = useRef<Awaited<ReturnType<typeof connectCloud>> | null>(
       null,
     ),
     stateRef = useRef<Save | null>(null),
     lastMove = useRef(0),
+    transitioning = useRef(false),
+    guideRef = useRef<Guide | null>(null),
     cloudReady = useRef(false);
   const setSave = useCallback((next: Save) => {
     const stamped = { ...next, updatedAt: Date.now() };
@@ -148,6 +157,31 @@ function GameSession({ account }: { account: Account | null }) {
     return () => clearInterval(timer);
   }, []);
   const modalOpen = Boolean(panel || battle || dialogue);
+  const guideIn = useCallback((s: Save) => {
+    const area = regionAt(s.x, s.y),
+      current = guideRef.current;
+    return current && current.area === area ? current : guideHome(area);
+  }, []);
+  useEffect(() => {
+    if (!sessionReady || modalOpen) return;
+    const timer = setInterval(() => {
+      const s = stateRef.current;
+      if (!s || s.room || transitioning.current || Math.random() < 0.5)
+        return;
+      const [dx, dy] = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ][Math.floor(Math.random() * 4)];
+      const current = guideIn(s),
+        next = wander(current, dx, dy, s);
+      if (next === current) return;
+      guideRef.current = next;
+      setGuide(next);
+    }, 1400);
+    return () => clearInterval(timer);
+  }, [sessionReady, modalOpen, guideIn]);
   useEffect(() => {
     if (!modalOpen) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -280,9 +314,12 @@ function GameSession({ account }: { account: Account | null }) {
   const talk = useCallback(() => {
     const s = stateRef.current;
     if (!sessionReady || !s || battle || panel || dialogue) return;
+    if (s.room) {
+      setNotice("Step onto the doormat to head back outside.");
+      return;
+    }
     const r = regionAt(s.x, s.y),
-      nx = (r % 5) * 32 + 19,
-      ny = Math.floor(r / 5) * 24 + 12;
+      { x: nx, y: ny } = guideIn(s);
     if (Math.abs(s.x - nx) + Math.abs(s.y - ny) > 2) {
       setNotice("Look for a guide beside the main path, then press J.");
       return;
@@ -308,9 +345,9 @@ function GameSession({ account }: { account: Account | null }) {
           "Your lead companion gains experience after each victory. You can change your lead in the team panel.",
         ],
       });
-  }, [battle, panel, dialogue, setSave, sessionReady]);
+  }, [battle, panel, dialogue, setSave, sessionReady, guideIn]);
   const step = useCallback(
-    (dx: number, dy: number) => {
+    (dx: number, dy: number, run = false) => {
       const s = stateRef.current;
       if (
         !sessionReady ||
@@ -318,12 +355,27 @@ function GameSession({ account }: { account: Account | null }) {
         battle ||
         panel ||
         dialogue ||
-        Date.now() - lastMove.current < 100
+        transitioning.current ||
+        Date.now() - lastMove.current < (run ? 60 : 100)
       )
         return;
       lastMove.current = Date.now();
-      const next = move(s, dx, dy);
+      setRunning(run);
+      const next = move(s, dx, dy, s.room ? undefined : guideIn(s));
       if (next === s) return;
+      if (
+        sceneOf(next) !== sceneOf(s) &&
+        !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        transitioning.current = true;
+        setFading(true);
+        setTimeout(() => {
+          setSave(next);
+          setFading(false);
+          transitioning.current = false;
+        }, 160);
+        return;
+      }
       stateRef.current = next;
       setSave(next);
       if (tileAt(next.x, next.y) === "wild" && Math.random() < 0.22) {
@@ -337,12 +389,12 @@ function GameSession({ account }: { account: Account | null }) {
         });
       }
     },
-    [battle, panel, dialogue, setSave, sessionReady],
+    [battle, panel, dialogue, setSave, sessionReady, guideIn],
   );
-  function direction(dx: number, dy: number) {
+  function direction(dx: number, dy: number, run = false) {
     if (!sessionReady) return;
     if (!modalOpen) {
-      step(dx, dy);
+      step(dx, dy, run);
       return;
     }
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
@@ -479,10 +531,33 @@ function GameSession({ account }: { account: Account | null }) {
   return (
     <main className={styles.screen}>
       <div className={styles.world} inert={modalOpen}>
-        <World save={save} trainers={active} onMove={step} />
+        <World
+          save={save}
+          trainers={active}
+          guide={
+            save.room
+              ? null
+              : guide && guide.area === region
+                ? guide
+                : guideHome(region)
+          }
+          running={running}
+          onMove={step}
+        />
+        <div
+          className={`${styles.fade} ${fading ? styles.fading : ""}`}
+          aria-hidden="true"
+        />
         <div className={styles.hud}>
           <div className={styles.location}>
-            <span>SOLARA · {TOWNS.has(region) ? "TOWN" : "WILD ROUTE"}</span>
+            <span>
+              SOLARA ·{" "}
+              {save.room
+                ? "HOUSE"
+                : TOWNS.has(region)
+                  ? "TOWN"
+                  : "WILD ROUTE"}
+            </span>
             <h1>{REGIONS[region]}</h1>
             <small>
               <i className="live-dot" />

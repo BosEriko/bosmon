@@ -27,6 +27,17 @@
   image-rendering: pixelated;
   cursor: crosshair;
 }
+.fade {
+  position: absolute;
+  inset: 0;
+  background: #101a16;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+.fading {
+  opacity: 1;
+}
 .hud {
   position: absolute;
   inset: 0;

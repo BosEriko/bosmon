@@ -1,6 +1,20 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { regionAt, Save, tileAt, TOWNS } from "@/lib/game";
+import {
+  HEIGHT,
+  regionAt,
+  REGION_H,
+  REGION_W,
+  ROOM_H,
+  ROOM_W,
+  roomTileAt,
+  Save,
+  sceneOf,
+  tileAt,
+  TOWNS,
+  walkable,
+  WIDTH,
+} from "@/lib/game";
 import type { Trainer } from "@/lib/firebase";
 import { worldViewport } from "@/lib/controls";
 import {
@@ -9,23 +23,46 @@ import {
   playerFrame,
   playerSourceFrame,
 } from "@/lib/player-sprite";
-import { initialCamera, updateCamera, cameraPosition } from "@/lib/camera";
+import {
+  initialCamera,
+  updateCamera,
+  cameraPosition,
+  clampCamera,
+} from "@/lib/camera";
+import { npcAnimationFrame, npcSourceFrame } from "@/lib/npc-sprite";
 const SIZE = 24;
 const PADDING = SIZE * 2;
 export default function World({
   save,
   trainers,
+  guide,
+  running,
   onMove,
 }: {
   save: Save;
   trainers: Trainer[];
+  guide: { x: number; y: number } | null;
+  running: boolean;
   onMove: (dx: number, dy: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const motion = useRef(initialMotion(save.x, save.y));
-  const camera = useRef(initialCamera(save.x, save.y));
+  const px = save.room ? save.room.x : save.x,
+    py = save.room ? save.room.y : save.y;
+  const motion = useRef(initialMotion(px, py));
+  const camera = useRef(initialCamera(px, py));
+  const walker = useRef(initialCamera(px, py));
+  const playerAt = useRef({ x: 0.5, y: 0.5 });
+  const gx = guide?.x ?? 0,
+    gy = guide?.y ?? 0,
+    hasGuide = guide !== null;
+  const guideWalk = useRef(initialCamera(gx, gy));
+  const guideMotion = useRef(initialMotion(gx, gy));
+  const scene = useRef(sceneOf(save));
   const [spriteSheet, setSpriteSheet] = useState<HTMLImageElement | null>(null);
   const [npcSheet, setNpcSheet] = useState<HTMLImageElement | null>(null);
+  const [npcWalkSheets, setNpcWalkSheets] = useState<
+    (HTMLImageElement | null)[]
+  >([null, null, null]);
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     const image = new Image();
@@ -34,6 +71,15 @@ export default function World({
     const npcs = new Image();
     npcs.onload = () => setNpcSheet(npcs);
     npcs.src = "/art/npcs-chibi.png";
+    const walking = [0, 1, 2].map((index) => {
+      const sheet = new Image();
+      sheet.onload = () =>
+        setNpcWalkSheets((previous) =>
+          previous.map((value, i) => (i === index ? sheet : value)),
+        );
+      sheet.src = `/art/npc-walk-${index}.png`;
+      return sheet;
+    });
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updatePreference = () => setReducedMotion(preference.matches);
     updatePreference();
@@ -41,6 +87,9 @@ export default function World({
     return () => {
       image.onload = null;
       npcs.onload = null;
+      walking.forEach((sheet) => {
+        sheet.onload = null;
+      });
       preference.removeEventListener("change", updatePreference);
     };
   }, []);
@@ -64,31 +113,80 @@ export default function World({
     layer.height = viewport.height + PADDING * 2;
     const ctx = layer.getContext("2d");
     if (!ctx) return;
-    motion.current = updateMotion(
-      motion.current,
-      save.x,
-      save.y,
-      performance.now(),
-    );
+    const { cols, rows, width, height } = viewport;
+    const cx = Math.floor(cols / 2),
+      cy = Math.floor(rows / 2);
+    const area = regionAt(save.x, save.y);
+    const left = save.room ? 0 : (area % 5) * REGION_W,
+      top = save.room ? 0 : Math.floor(area / 5) * REGION_H;
+    const camX = clampCamera(
+        px,
+        left,
+        left + (save.room ? ROOM_W : REGION_W) - 1,
+        cx,
+      ),
+      camY = clampCamera(
+        py,
+        top,
+        top + (save.room ? ROOM_H : REGION_H) - 1,
+        cy,
+      );
+    if (scene.current !== sceneOf(save)) {
+      scene.current = sceneOf(save);
+      motion.current = {
+        ...motion.current,
+        x: px,
+        y: py,
+        lastStepAt: -Infinity,
+      };
+      camera.current = initialCamera(camX, camY);
+      walker.current = initialCamera(px, py);
+      guideWalk.current = initialCamera(gx, gy);
+      guideMotion.current = initialMotion(gx, gy);
+    }
+    const tween = running ? 75 : undefined;
+    motion.current = updateMotion(motion.current, px, py, performance.now());
     camera.current = updateCamera(
       camera.current,
-      save.x,
-      save.y,
+      camX,
+      camY,
       performance.now(),
       reducedMotion,
+      tween,
+    );
+    walker.current = updateCamera(
+      walker.current,
+      px,
+      py,
+      performance.now(),
+      reducedMotion,
+      tween,
+    );
+    guideMotion.current = updateMotion(
+      guideMotion.current,
+      gx,
+      gy,
+      performance.now(),
+    );
+    guideWalk.current = updateCamera(
+      guideWalk.current,
+      gx,
+      gy,
+      performance.now(),
+      reducedMotion,
+      320,
     );
     ctx.imageSmoothingEnabled = false;
-    const { cols, rows, width, height } = viewport;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.translate(
       PADDING + Math.floor((width - cols * SIZE) / 2),
       PADDING + Math.floor((height - rows * SIZE) / 2),
     );
-    const cx = Math.floor(cols / 2),
-      cy = Math.floor(rows / 2);
-    const ox = save.x - cx,
-      oy = save.y - cy;
+    const ox = Math.floor(camX) - cx,
+      oy = Math.floor(camY) - cy;
+    const outside = (x: number, y: number) =>
+      x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT && regionAt(x, y) !== area;
     const rect = (x: number, y: number, w: number, h: number, c: string) => {
       ctx.fillStyle = c;
       ctx.fillRect(x, y, w, h);
@@ -99,8 +197,78 @@ export default function World({
           wy = oy + row,
           x = col * SIZE,
           y = row * SIZE,
-          t = tileAt(wx, wy),
           n = Math.abs((wx * 13 + wy * 7) % 9);
+        if (save.room) {
+          const r = roomTileAt(wx, wy);
+          if (r === "void") {
+            rect(x, y, 24, 24, "#1f2b24");
+            continue;
+          }
+          if (r === "wall") {
+            rect(x, y, 24, 24, "#8a6a4f");
+            rect(x, y + 20, 24, 4, "#6e5240");
+            if (wy === 0) rect(x, y + 8, 24, 2, "#a7856a");
+            continue;
+          }
+          rect(x, y, 24, 24, "#e2c792");
+          rect(x, y + 7, 24, 1, "#cfb07c");
+          rect(x, y + 15, 24, 1, "#cfb07c");
+          rect(x + ((wy % 2) * 12 + 4), y, 1, 7, "#cfb07c");
+          if (r === "rug") rect(x + 1, y + 1, 22, 22, "#b65f55");
+          if (r === "rug") rect(x + 4, y + 4, 16, 16, "#d4836d");
+          if (r === "door") {
+            rect(x + 2, y + 4, 20, 20, "#5b4636");
+            rect(x + 4, y + 6, 16, 16, "#9c7a52");
+            rect(x + 6, y + 10, 12, 2, "#c8a874");
+          }
+          if (r === "shelf") {
+            rect(x + 1, y, 22, 22, "#7a5638");
+            rect(x + 3, y + 3, 18, 7, "#5a3e2a");
+            rect(x + 3, y + 12, 18, 7, "#5a3e2a");
+            rect(x + 5, y + 4, 3, 6, "#6d9bc3");
+            rect(x + 10, y + 5, 3, 5, "#d4836d");
+            rect(x + 14, y + 13, 4, 6, "#8bb36b");
+          }
+          if (r === "bed") {
+            rect(x, y, 24, 24, "#f1e6cf");
+            if (wy === 1) {
+              rect(x + 3, y + 2, 18, 6, "#fffaf0");
+              rect(x, y + 11, 24, 13, "#6f8fbf");
+            } else {
+              rect(x, y, 24, 20, "#6f8fbf");
+              rect(x, y + 20, 24, 4, "#7a5638");
+            }
+          }
+          if (r === "table") {
+            rect(x, y + 4, 24, 14, "#9a6c45");
+            rect(x, y + 4, 24, 3, "#b88559");
+            rect(x + 3, y + 18, 3, 6, "#6e4a30");
+            rect(x + 18, y + 18, 3, 6, "#6e4a30");
+          }
+          continue;
+        }
+        const t = tileAt(wx, wy);
+        if (outside(wx, wy)) {
+          rect(x, y, 24, 24, "#1f2b24");
+          const entrance =
+            t === "path" &&
+            [
+              [1, 0],
+              [-1, 0],
+              [0, 1],
+              [0, -1],
+            ].some(
+              ([dx, dy]) =>
+                regionAt(wx + dx, wy + dy) === area &&
+                !outside(wx + dx, wy + dy) &&
+                walkable(wx + dx, wy + dy),
+            );
+          if (entrance) {
+            rect(x, y, 24, 24, "#e1cd98");
+            rect(x, y, 24, 24, "#1f2b24a6");
+          }
+          continue;
+        }
         rect(x, y, 24, 24, n % 3 === 0 ? "#9cc878" : "#a5ce7e");
         if (t === "grass" || t === "wild") {
           rect(x + 4 + n, y + 5, 2, 3, "#86b56a");
@@ -169,6 +337,7 @@ export default function World({
       label?: string,
       painter = ctx,
       npcFrame?: number,
+      walkingFrame?: { row: number; column: number },
     ) => {
       const rect = (
         x: number,
@@ -189,22 +358,42 @@ export default function World({
         y > rows * SIZE + PADDING
       )
         return;
-      if (npcSheet && npcFrame !== undefined) {
+      const walkingSheet =
+        npcFrame !== undefined ? npcWalkSheets[npcFrame] : null;
+      if ((npcSheet || walkingSheet) && npcFrame !== undefined) {
         painter.fillStyle = "#354c3b40";
         painter.beginPath();
         painter.ellipse(x + 12, y + 21, 7, 3, 0, 0, Math.PI * 2);
         painter.fill();
-        painter.drawImage(
-          npcSheet,
-          npcFrame % 2 === 0 ? 82 : 579,
-          npcFrame < 2 ? 45 : 605,
-          600,
-          600,
-          x - 4,
-          y - 9,
-          32,
-          32,
-        );
+        if (walkingSheet && walkingFrame) {
+          const source = npcSourceFrame(
+            npcFrame,
+            walkingFrame.row,
+            walkingFrame.column,
+          );
+          painter.drawImage(
+            walkingSheet,
+            source.x,
+            source.y,
+            source.width,
+            source.height,
+            x - 4,
+            y - 9,
+            32,
+            32,
+          );
+        } else if (npcSheet)
+          painter.drawImage(
+            npcSheet,
+            npcFrame % 2 === 0 ? 82 : 579,
+            npcFrame < 2 ? 45 : 605,
+            600,
+            600,
+            x - 4,
+            y - 9,
+            32,
+            32,
+          );
       } else {
         rect(x + 5, y + 21, 15, 3, "#789864");
         rect(x + 8, y + 15, 4, 7, "#3d4d51");
@@ -222,39 +411,77 @@ export default function World({
         painter.fillText(label, x + 12, y - 5);
       }
     };
-    const r = regionAt(save.x, save.y),
-      rx = (r % 5) * 32,
-      ry = Math.floor(r / 5) * 24;
-    person(
-      rx + 19,
-      ry + 12,
-      TOWNS.has(r) ? "#8b739e" : "#c79b53",
-      undefined,
-      ctx,
-      TOWNS.has(r) ? r % 2 : 2,
-    );
-    for (const t of trainers)
-      if (t.updatedAt && Date.now() - t.updatedAt.toMillis() < 120000)
-        person(t.x, t.y, "#6988b3", t.name, ctx, 3);
+    if (!save.room) {
+      for (const t of trainers)
+        if (
+          t.updatedAt &&
+          Date.now() - t.updatedAt.toMillis() < 120000 &&
+          regionAt(t.x, t.y) === area
+        )
+          person(t.x, t.y, "#6988b3", t.name, ctx, 3);
+    }
 
-    const playerX = Math.floor((width - cols * SIZE) / 2) + cx * SIZE;
-    const playerY = Math.floor((height - rows * SIZE) / 2) + cy * SIZE;
+    const offsetX = Math.floor((width - cols * SIZE) / 2),
+      offsetY = Math.floor((height - rows * SIZE) / 2);
     let animation = 0;
     const paint = (now: number) => {
       output.setTransform(1, 0, 0, 1, 0, 0);
       output.imageSmoothingEnabled = false;
       output.clearRect(0, 0, width, height);
       const position = cameraPosition(camera.current, now);
+      const step = cameraPosition(walker.current, now);
       output.drawImage(
         layer,
-        Math.round((save.x - position.x) * SIZE) - PADDING,
-        Math.round((save.y - position.y) * SIZE) - PADDING,
+        Math.round((Math.floor(camX) - position.x) * SIZE) - PADDING,
+        Math.round((Math.floor(camY) - position.y) * SIZE) - PADDING,
       );
-      const frame = playerFrame(motion.current, now, reducedMotion);
+      const playerX = offsetX + Math.round((step.x - position.x + cx) * SIZE),
+        playerY = offsetY + Math.round((step.y - position.y + cy) * SIZE);
+      playerAt.current = {
+        x: (playerX + SIZE / 2) / width,
+        y: (playerY + SIZE / 2) / height,
+      };
+      const frame = playerFrame(
+        motion.current,
+        now,
+        reducedMotion,
+        running ? 55 : undefined,
+      );
+      const guideAt = cameraPosition(guideWalk.current, now);
+      const drawGuide = () => {
+        if (!hasGuide) return;
+        const screenX =
+            offsetX + Math.round((guideAt.x - position.x + cx) * SIZE),
+          screenY = offsetY + Math.round((guideAt.y - position.y + cy) * SIZE);
+        output.save();
+        output.translate(
+          screenX - (gx - ox) * SIZE,
+          screenY - (gy - oy) * SIZE,
+        );
+        person(
+          gx,
+          gy,
+          TOWNS.has(area) ? "#8b739e" : "#c79b53",
+          undefined,
+          output,
+          TOWNS.has(area) ? area % 2 : 2,
+          npcAnimationFrame(
+            guideMotion.current,
+            now,
+            guideAt.moving,
+            reducedMotion,
+          ),
+        );
+        output.restore();
+      };
+      if (guideAt.y <= step.y) drawGuide();
       if (!spriteSheet) {
         output.save();
-        output.translate(playerX - cx * SIZE, playerY - cy * SIZE);
-        person(save.x, save.y, "#d97b4f", undefined, output);
+        output.translate(
+          playerX - (px - ox) * SIZE,
+          playerY - (py - oy) * SIZE,
+        );
+        person(px, py, "#d97b4f", undefined, output);
         output.restore();
       }
       if (spriteSheet) {
@@ -275,12 +502,25 @@ export default function World({
           32,
         );
       }
-      if (frame.walking || position.moving)
+      if (guideAt.y > step.y) drawGuide();
+      if (frame.walking || position.moving || step.moving || guideAt.moving)
         animation = requestAnimationFrame(paint);
     };
     paint(performance.now());
     return () => cancelAnimationFrame(animation);
-  }, [save, trainers, viewport, spriteSheet, npcSheet, reducedMotion]);
+  }, [
+    save,
+    trainers,
+    viewport,
+    spriteSheet,
+    npcSheet,
+    npcWalkSheets,
+    reducedMotion,
+    gx,
+    gy,
+    hasGuide,
+    running,
+  ]);
   return (
     <canvas
       ref={ref}
@@ -290,8 +530,8 @@ export default function World({
       aria-label="Explorable world. Move with arrow keys or W A S D. Press J near a guide to talk. Press K for the menu."
       onClick={(e) => {
         const r = e.currentTarget.getBoundingClientRect(),
-          dx = (e.clientX - r.left) / r.width - 0.5,
-          dy = (e.clientY - r.top) / r.height - 0.5;
+          dx = (e.clientX - r.left) / r.width - playerAt.current.x,
+          dy = (e.clientY - r.top) / r.height - playerAt.current.y;
         if (Math.abs(dx) > Math.abs(dy)) onMove(Math.sign(dx), 0);
         else onMove(0, Math.sign(dy));
       }}

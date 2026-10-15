@@ -4,15 +4,20 @@ import {
   awardXp,
   catchChance,
   HEIGHT,
+  guideHome,
   initialSave,
+  isDoor,
   maxHp,
   move,
+  ROOM_DOOR,
+  sceneOf,
   parseSave,
   regionAt,
   REGIONS,
   tileAt,
   TOWNS,
   walkable,
+  wander,
   WIDTH,
 } from "../lib/game";
 test("a new adventure has a healthy starter and capture supplies", () => {
@@ -106,4 +111,74 @@ test("a max-level companion remains saveable after gaining experience", () => {
   assert.equal(s.team[0].level, 100);
   assert.equal(s.team[0].xp, 0);
   assert.ok(parseSave(s));
+});
+test("walking north into a town door enters the house and the doormat leads back out", () => {
+  const outside = { ...initialSave(), x: 9, y: 9 };
+  assert.ok(isDoor(9, 8));
+  assert.ok(isDoor(25, 8));
+  const inside = move(outside, 0, -1);
+  assert.deepEqual(inside.room, { x: ROOM_DOOR.x, y: ROOM_DOOR.y - 1 });
+  assert.equal(inside.x, 9);
+  assert.equal(inside.y, 9);
+  assert.notEqual(sceneOf(inside), sceneOf(outside));
+  assert.equal(move(inside, 1, 0).room?.x, ROOM_DOOR.x + 1);
+  assert.equal(move({ ...inside, room: { x: 1, y: 2 } }, 0, -1).room?.y, 2);
+  const back = move(inside, 0, 1);
+  assert.equal(back.room, null);
+  assert.equal(back.x, 9);
+  assert.equal(back.y, 9);
+  assert.equal(move(outside, 0, 1).room, null);
+});
+test("every town doorstep is walkable and wild routes have no doors", () => {
+  for (const r of TOWNS)
+    for (const a of [9, 25]) {
+      const x = (r % 5) * 32 + a,
+        y = Math.floor(r / 5) * 24 + 9;
+      assert.ok(walkable(x, y));
+      assert.ok(isDoor(x, y - 1));
+    }
+  assert.equal(isDoor(32 + 9, 8), false);
+});
+test("crossing into a neighbouring area changes the scene", () => {
+  const s = { ...initialSave(), x: 31, y: 12 };
+  assert.notEqual(sceneOf(move(s, 1, 0)), sceneOf(s));
+  assert.equal(sceneOf(move(s, -1, 0)), sceneOf(s));
+});
+test("saves validate rooms and accept saves from before rooms existed", () => {
+  const { room: _room, ...legacy } = initialSave();
+  assert.equal(parseSave(legacy)?.room, null);
+  const inside = { ...initialSave(), x: 9, y: 9, room: { x: 5, y: 6 } };
+  assert.deepEqual(parseSave(inside)?.room, { x: 5, y: 6 });
+  assert.equal(parseSave({ ...inside, room: { x: 0, y: 0 } }), null);
+  assert.equal(parseSave({ ...inside, x: 16, y: 12 }), null);
+});
+test("the guide blocks the player's path", () => {
+  const s = { ...initialSave(), x: 16, y: 12 };
+  assert.equal(move(s, 1, 0, { x: 17, y: 12 }), s);
+  assert.equal(move(s, 0, 1, { x: 17, y: 12 }).y, 13);
+});
+test("guides wander one tile at a time near home and never onto the player", () => {
+  const home = guideHome(0),
+    far = { x: 0, y: 0 };
+  assert.deepEqual(home, { area: 0, x: 19, y: 12 });
+  let g = home;
+  for (let i = 0; i < 2; i++) g = wander(g, 1, 0, far);
+  assert.equal(g.x, 21);
+  assert.equal(wander(g, 1, 0, far), g);
+  assert.equal(wander(home, 1, 1, far), home);
+  assert.equal(wander(home, -1, 0, { x: 18, y: 12 }), home);
+  for (let area = 0; area < 25; area++) {
+    let guide = guideHome(area);
+    for (let i = 0; i < 200; i++) {
+      const [dx, dy] = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ][i % 4 === 0 ? (i * 7) % 4 : (i * 13) % 4];
+      guide = wander(guide, dx, dy, far);
+      assert.ok(walkable(guide.x, guide.y));
+      assert.equal(regionAt(guide.x, guide.y), area);
+    }
+  }
 });
