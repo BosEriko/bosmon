@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   HEIGHT,
+  houseAt,
   regionAt,
   REGION_H,
   REGION_W,
@@ -117,6 +118,13 @@ export default function World({
     const cx = Math.floor(cols / 2),
       cy = Math.floor(rows / 2);
     const area = regionAt(save.x, save.y);
+    const biome = Math.floor(area / 5);
+    const ground = ["#a5ce7e", "#c6c18a", "#9fc9a1", "#a4b7ba", "#b5ce93"][
+      biome
+    ];
+    const canopy = ["#538c50", "#a17e45", "#4b8e7a", "#657d91", "#a37f99"][
+      biome
+    ];
     const left = save.room ? 0 : (area % 5) * REGION_W,
       top = save.room ? 0 : Math.floor(area / 5) * REGION_H;
     const camX = clampCamera(
@@ -269,10 +277,18 @@ export default function World({
           }
           continue;
         }
-        rect(x, y, 24, 24, n % 3 === 0 ? "#9cc878" : "#a5ce7e");
+        rect(x, y, 24, 24, n % 3 === 0 ? "#9cc878" : ground);
         if (t === "grass" || t === "wild") {
           rect(x + 4 + n, y + 5, 2, 3, "#86b56a");
           rect(x + 15, y + 17 - n, 3, 2, "#b7d88c");
+          if (t === "grass" && n === 5) {
+            rect(x + 6, y + 16, 7, 3, "#85917c");
+            rect(x + 7, y + 14, 5, 2, "#bac3a4");
+          }
+          if (t === "grass" && n === 7) {
+            rect(x + 16, y + 8, 1, 5, "#5d8c55");
+            rect(x + 14, y + 7, 5, 3, biome === 4 ? "#e5a7bd" : "#eee3b1");
+          }
           if (n === 2) {
             rect(x + 8, y + 12, 3, 3, "#f2e9a2");
             rect(x + 9, y + 11, 1, 5, "#fff5c3");
@@ -298,27 +314,44 @@ export default function World({
           rect(x + 3, y + 5 + n, 9, 2, "#a2d3ce");
           rect(x + 14, y + 17, 6, 1, "#a2d3ce");
           if (tileAt(wx, wy - 1) !== "water") rect(x, y, 24, 3, "#d2d4a3");
+          if (tileAt(wx - 1, wy) !== "water") rect(x, y, 3, 24, "#d2d4a3");
+          if (tileAt(wx + 1, wy) !== "water") rect(x + 21, y, 3, 24, "#d2d4a3");
+          if (tileAt(wx, wy + 1) !== "water") rect(x, y + 21, 24, 3, "#d2d4a3");
+          if (n === 3) {
+            rect(x + 7, y + 9, 6, 3, "#65996f");
+            rect(x + 10, y + 8, 2, 2, "#ead6c1");
+          }
         }
         if (t === "tree") {
           rect(x + 9, y + 16, 7, 8, "#786c49");
           rect(x + 5, y + 6, 16, 15, "#386c46");
           rect(x + 2, y + 9, 21, 9, "#467f4c");
-          rect(x + 5, y + 3, 16, 12, "#538c50");
+          rect(x + 5, y + 3, 16, 12, canopy);
           rect(x + 8, y + 1, 10, 9, "#639b56");
           rect(x + 7, y + 5, 4, 3, "#80ae65");
           rect(x + 5, y + 18, 15, 2, "#356644");
         }
         if (t === "house") {
           const a = wx % 32,
-            b = wy % 24;
-          rect(x, y, 24, 24, b <= 6 ? "#ad6953" : "#f1e0af");
-          if (b <= 6) {
+            b = wy % 24,
+            house = houseAt(wx, wy)!;
+          const roof = b < house.bottom - 1;
+          rect(
+            x,
+            y,
+            24,
+            24,
+            roof
+              ? ["#ad6953", "#6d8397", "#8c7792"][(area + house.left) % 3]
+              : "#f1e0af",
+          );
+          if (roof) {
             rect(x, y + 2, 24, 2, "#c87c60");
             rect(x, y + 13, 24, 2, "#945640");
             rect(x + (b % 2) * 10, y + 3, 2, 10, "#955d48");
           } else {
             rect(x, y + 22, 24, 2, "#c8b78e");
-            if (a === 8 || a === 24) {
+            if (a === house.left + 1 || a === house.right) {
               rect(x + 6, y + 4, 12, 17, "#668e8c");
               rect(x + 11, y + 4, 2, 17, "#d3d5b0");
               rect(x + 6, y + 11, 12, 2, "#d3d5b0");

@@ -67,6 +67,22 @@ test("all 25 regions and all eight encounter species are reachable from the star
         queue.push([a, b]);
     }
   }
+  for (let area = 0; area < REGIONS.length; area++) {
+    const guide = guideHome(area);
+    assert.ok(
+      seen.has(`${guide.x},${guide.y}`),
+      `Guide in ${REGIONS[area]} is reachable`,
+    );
+    if (TOWNS.has(area))
+      for (const door of [9, 25]) {
+        assert.ok(
+          seen.has(
+            `${(area % 5) * 32 + door},${Math.floor(area / 5) * 24 + 9}`,
+          ),
+          `Door ${door} in ${REGIONS[area]} is reachable`,
+        );
+      }
+  }
   assert.equal(visited.size, REGIONS.length);
   assert.equal(species.size, 8);
   assert.equal(TOWNS.size, 10);
@@ -181,4 +197,26 @@ test("guides wander one tile at a time near home and never onto the player", () 
       assert.equal(regionAt(guide.x, guide.y), area);
     }
   }
+});
+
+test("terrain varies between regions instead of repeating mirrored blocks", () => {
+  const layouts = new Set<string>();
+  for (let r = 0; r < REGIONS.length; r++) {
+    let layout = "";
+    for (let y = 1; y < 23; y++)
+      for (let x = 1; x < 31; x++)
+        layout += tileAt((r % 5) * 32 + x, Math.floor(r / 5) * 24 + y);
+    layouts.add(layout);
+  }
+  assert.equal(layouts.size, REGIONS.length);
+});
+
+test("changed terrain relocates an old save without losing progress", () => {
+  const save = { ...initialSave(), x: 6, y: 5, coins: 700 };
+  const restored = parseSave(save)!;
+  assert.ok(restored);
+  assert.ok(walkable(restored.x, restored.y));
+  assert.equal(regionAt(restored.x, restored.y), regionAt(save.x, save.y));
+  assert.equal(restored.coins, 700);
+  assert.deepEqual(restored.team, save.team);
 });

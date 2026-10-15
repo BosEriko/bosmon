@@ -115,29 +115,56 @@ export type Save = {
 export type Tile = "grass" | "wild" | "path" | "tree" | "water" | "house";
 export const regionAt = (x: number, y: number) =>
   Math.floor(y / REGION_H) * 5 + Math.floor(x / REGION_W);
+export function houseAt(x: number, y: number) {
+  const r = regionAt(x, y),
+    a = x % REGION_W,
+    b = y % REGION_H;
+  if (!TOWNS.has(r)) return null;
+  for (const door of [9, 25]) {
+    const left = door - (door === 9 ? 3 : 2),
+      right = door + (door === 9 ? 1 + (r % 2) : 2),
+      top = 3 + ((r + door) % 3);
+    if (a >= left && a <= right && b >= top && b <= 8)
+      return { left, right, top, bottom: 8, door };
+  }
+  return null;
+}
+const roadY = (a: number, r: number) =>
+  12 + Math.round(Math.sin((a / 31) * Math.PI * 2) * (2 + (r % 3)));
+const roadX = (b: number, r: number) =>
+  16 + Math.round(Math.sin((b / 23) * Math.PI * 2) * (2 + ((r * 3) % 4)));
 export function tileAt(x: number, y: number): Tile {
   if (x < 0 || y < 0 || x >= WIDTH || y >= HEIGHT) return "tree";
-  const a = x % 32,
-    b = y % 24,
+  const a = x % REGION_W,
+    b = y % REGION_H,
     r = regionAt(x, y);
-  if ((a >= 14 && a <= 17) || (b >= 11 && b <= 13)) return "path";
-  if (TOWNS.has(r) && b === 9 && (a === 9 || a === 25)) return "path";
+  if (houseAt(x, y)) return "house";
   if (
     TOWNS.has(r) &&
-    ((a >= 6 && a <= 10) || (a >= 22 && a <= 26)) &&
-    b >= 5 &&
-    b <= 8
+    [9, 25].some(
+      (door) => a === door && b >= 9 && b <= Math.max(9, roadY(door, r) + 1),
+    )
   )
-    return "house";
-  if (a === 0 || a === 31 || b === 0 || b === 23) return "tree";
-  if (a >= 23 && a <= 29 && b >= 16 && b <= 21) return "water";
-  const n = (x * 19 + y * 31 + x * y * 7) % 101;
-  if (n < 11) return "tree";
+    return "path";
   if (
-    (a >= 3 && a <= 12 && b >= 15 && b <= 21) ||
-    (a >= 21 && a <= 28 && b >= 2 && b <= 4)
+    Math.abs(b - roadY(a, r)) <= 1 ||
+    Math.abs(a - roadX(b, r)) <= (TOWNS.has(r) ? 1 : 0)
   )
-    return "wild";
+    return "path";
+  if (a >= 17 && a <= 21 && b >= 10 && b <= 14) return "grass";
+  if (a === 0 || a === 31 || b === 0 || b === 23) return "tree";
+  const pondX = r % 3 === 0 ? 25 : r % 3 === 1 ? 7 : 26,
+    pondY = r % 3 === 1 ? 6 : 18,
+    pond =
+      ((a - pondX) / (3 + (r % 3))) ** 2 + ((b - pondY) / (2 + (r % 2))) ** 2;
+  if (pond < 1 + Math.sin(a * 1.7 + b * 0.8) * 0.22) return "water";
+  const grove =
+    Math.sin((a + r * 7) * 0.37) +
+    Math.cos((b - r * 3) * 0.52) +
+    Math.sin((a + b) * 0.24);
+  if (grove > 1.35 || (x * 19 + y * 31 + x * y * 7) % 101 < 4) return "tree";
+  const meadow = Math.sin((a - r * 2) * 0.29) + Math.cos((b + r) * 0.41);
+  if (meadow > (TOWNS.has(r) ? 0.8 : 0.1)) return "wild";
   return "grass";
 }
 export const walkable = (x: number, y: number) =>
@@ -148,19 +175,11 @@ export const ROOM_W = 11,
   ROOM_H = 8,
   ROOM_DOOR = { x: 5, y: 7 };
 export type RoomTile =
-  | "wall"
-  | "floor"
-  | "rug"
-  | "bed"
-  | "table"
-  | "shelf"
-  | "door"
-  | "void";
+  "wall" | "floor" | "rug" | "bed" | "table" | "shelf" | "door" | "void";
 export function roomTileAt(x: number, y: number): RoomTile {
   if (x < 0 || y < 0 || x >= ROOM_W || y >= ROOM_H) return "void";
   if (x === ROOM_DOOR.x && y === ROOM_DOOR.y) return "door";
-  if (x === 0 || y === 0 || x === ROOM_W - 1 || y === ROOM_H - 1)
-    return "wall";
+  if (x === 0 || y === 0 || x === ROOM_W - 1 || y === ROOM_H - 1) return "wall";
   if (y === 1 && x >= 1 && x <= 3) return "shelf";
   if (x >= 8 && y <= 2) return "bed";
   if (y === 3 && x >= 4 && x <= 6) return "table";
@@ -287,7 +306,6 @@ export function parseSave(raw: unknown): Save | null {
     s.name.length > 24 ||
     !int(s.x, 0, 159) ||
     !int(s.y, 0, 119) ||
-    !walkable(s.x, s.y) ||
     !Array.isArray(s.team) ||
     !s.team.length ||
     s.team.length > 100 ||
@@ -323,5 +341,10 @@ export function parseSave(raw: unknown): Save | null {
       !isDoor(s.x, s.y - 1))
   )
     return null;
+  if (!room && !walkable(s.x, s.y)) {
+    const area = regionAt(s.x, s.y),
+      home = guideHome(area);
+    return { ...s, room, x: home.x - 1, y: home.y };
+  }
   return { ...s, room };
 }
